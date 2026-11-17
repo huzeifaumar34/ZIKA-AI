@@ -1,0 +1,29 @@
+# Compilação
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Modelos e checkpoints (ficheiros grandes)
+models/*.zika
+*.ckpt
+checkpoints/
+
+# Dados grandes
+data/raw/
+data/*.bin
+
+# Editores e sistema
+.vscode/
+.idea/
+.DS_Store
