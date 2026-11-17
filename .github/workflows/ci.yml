@@ -24,8 +24,8 @@ jobs:
       - name: CLI smoke test
         run: |
           ./build/zika version
-          ./build/zika init --config configs/nano.json --out /tmp/zika-nano.zika
-          ./build/zika info /tmp/zika-nano.zika
+          ./build/zika init --config configs/nano.json --out /tmp/zika-nano-empty.zika
+          ./build/zika info /tmp/zika-nano-empty.zika
 
       - uses: actions/setup-python@v5
         with:
@@ -62,6 +62,22 @@ jobs:
                 manifest["validation"]["tokens"], "tokens de validacao")
           PY
 
+      - name: ZIKA-Nano training smoke test
+        run: |
+          ./build/zika train \
+            --config configs/nano.json \
+            --data "$RUNNER_TEMP/zika-data/train.bin" \
+            --val-data "$RUNNER_TEMP/zika-data/val.bin" \
+            --out "$RUNNER_TEMP/zika-nano-smoke.zika" \
+            --checkpoint "$RUNNER_TEMP/zika-nano-smoke.ckpt" \
+            --steps 2 \
+            --batch-size 1 \
+            --seq-len 8 \
+            --warmup-steps 1 \
+            --log-every 1 \
+            --checkpoint-every 1
+          ./build/zika info "$RUNNER_TEMP/zika-nano-smoke.zika"
+
       - name: Upload processed dataset
         uses: actions/upload-artifact@v4
         with:
@@ -69,3 +85,13 @@ jobs:
           path: ${{ runner.temp }}/zika-data/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload training smoke result
+        uses: actions/upload-artifact@v4
+        with:
+          name: zika-phase4-smoke
+          path: |
+            ${{ runner.temp }}/zika-nano-smoke.zika
+            ${{ runner.temp }}/zika-nano-smoke.ckpt
+          if-no-files-found: error
+          retention-days: 7

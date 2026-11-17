@@ -236,6 +236,29 @@ std::vector<float> forward_logits(const Model &model,
   return run_forward(model, input_ids).logits.data;
 }
 
+float causal_loss(const Model &model,
+                  const std::vector<uint32_t> &input_ids,
+                  const std::vector<uint32_t> &targets) {
+  const ForwardCache c = run_forward(model, input_ids);
+  if (targets.size() != c.t)
+    throw std::invalid_argument("targets tem de ter o mesmo tamanho que input_ids");
+  double loss = 0.0;
+  for (uint32_t t = 0; t < c.t; ++t) {
+    if (targets[t] >= c.vocab)
+      throw std::invalid_argument("target fora do vocabulario");
+    const size_t base = static_cast<size_t>(t) * c.vocab;
+    float maximum = c.logits.data[base];
+    for (uint32_t v = 1; v < c.vocab; ++v)
+      maximum = std::max(maximum, c.logits.data[base + v]);
+    double total = 0.0;
+    for (uint32_t v = 0; v < c.vocab; ++v)
+      total += std::exp(c.logits.data[base + v] - maximum);
+    loss += static_cast<double>(maximum) + std::log(total) -
+            c.logits.data[base + targets[t]];
+  }
+  return static_cast<float>(loss / c.t);
+}
+
 float loss_and_backward(const Model &model,
                         const std::vector<uint32_t> &input_ids,
                         const std::vector<uint32_t> &targets,

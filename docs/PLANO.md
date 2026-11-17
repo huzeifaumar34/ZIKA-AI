@@ -1,6 +1,6 @@
 # Plano do ZIKA-AI
 
-Documento de definição e implementação do projeto. Os pontos marcados como rascunho serão fixados na fase indicada.
+Documento de definição e implementação do projeto.
 
 ## 1. Decisões
 
@@ -54,13 +54,11 @@ Tokens especiais e IDs: 0 = <|user|>, 1 = <|ia|>, 2 = <|fim|>. Os restantes IDs 
 - É possível acrescentar dados próprios em data/, desde que respeitem o esquema e o vocabulário do tokenizer
 - Pré-treino em texto corrido antes do ajuste nos diálogos fica como opção futura
 
-### Pipeline de dados (implementado na Fase 3)
-
-Executar a partir da raiz do repositório:
+### Pipeline de dados (Fase 3 implementada)
 
     PYTHONPATH=python python -m zika.data --input data/dialogos.jsonl --output-dir data/processed
 
-O pipeline valida JSONL, alternância de papéis, marcadores reservados e cobertura do vocabulário; serializa cada conversa com os tokens especiais; divide treino e validação de forma determinística ao nível da conversa; exporta IDs uint32 little-endian e grava tokenizer.json e manifest.json com contagens e hashes SHA-256. Os artefactos processados não são versionados.
+O pipeline valida JSONL, alternância de papéis, marcadores reservados e cobertura do vocabulário; serializa cada conversa com tokens especiais; divide treino e validação ao nível da conversa; exporta IDs uint32 little-endian e grava tokenizer.json e manifest.json com contagens e hashes SHA-256. Os artefactos processados não são versionados.
 
 ## 5. Formato de ficheiro .zika (versão 1, fixada na Fase 1)
 
@@ -100,8 +98,8 @@ Os ficheiros de configuração (configs/*.json) são JSON plano com as chaves na
 |---|---|---|
 | 1 (feita) | Esqueleto, CMake, formato .zika | Compila e escreve/lê um .zika vazio |
 | 2 (feita) | Núcleo C++ (ops, transformer, AdamW) | Testes de gradiente passam no CI |
-| 3 (feita) | Corpus, tokenizer char-v0.1, pipeline JSONL | Corpus validado e tokenizado de ida e volta sem perdas |
-| 4 | Treino do ZIKA-Nano | A perda desce e o texto gerado parece português |
+| 3 (feita) | Corpus, tokenizer char-v0.1, pipeline JSONL | Corpus gerado e tokenizado de ida e volta sem perdas |
+| 4 (em curso) | Treino do ZIKA-Nano | Treino real do Nano, loss de validação acompanhada e amostra de texto avaliada |
 | 5 | Chat no terminal | zika chat mantém uma conversa |
 | 6 | Chat web | Abre no telemóvel e responde offline |
 | 7 | ZIKA-Mini e int8 | Modelo maior treinado e exportado em tamanho reduzido |
@@ -114,8 +112,6 @@ Os ficheiros de configuração (configs/*.json) são JSON plano com as chaves na
 - initialize_weights: inicialização determinística das matrizes e embeddings; zika init continua a gerar pesos a zero para manter o comportamento documentado da Fase 1
 - CI: compilação C++17, testes CTest e smoke test do CLI
 
-Ainda não fazem parte da Fase 2: ciclo completo de treino por épocas/lotes, scheduler warm-up/cosseno, checkpoints, KV cache e amostragem de geração.
-
 ### Implementação da Fase 3
 
 - python/zika/tokenizer.py: CharTokenizer de 124 tokens; encode/decode sem perdas, marcadores especiais atómicos, rejeição de caracteres desconhecidos e gravação/leitura do vocabulário JSON
@@ -124,10 +120,21 @@ Ainda não fazem parte da Fase 2: ciclo completo de treino por épocas/lotes, sc
 - python/tests/: testes unitários de vocabulário, acentos, round-trip, tokens inválidos, JSONL, divisão determinística e binários
 - CI: testes C++ e Python e preparação automática do corpus em cada push, pull request ou execução manual
 
+### Implementação da Fase 4 (motor e infraestrutura de treino)
+
+- core/src/training.cpp: janelas causais aleatórias, batches, acumulação média de gradientes, avaliação determinística e tratamento de dados uint32 little-endian
+- AdamW: learning rate ajustável por passo e serialização dos momentos para checkpoints
+- Scheduler: warm-up linear seguido de decaimento cosseno até uma fração mínima da taxa inicial
+- Checkpoint ZCKP v1: modelo .zika embutido, estado AdamW, contador de passos, estado do gerador aleatório, CRC32 dos dados de treino/validação e checksum global; escrita atómica e rejeição de corpus/configuração diferentes
+- CLI: comando zika train com opções de passos, batch, comprimento de sequência, seed, hiperparâmetros, checkpoint e retoma
+- CI: teste de sobreajuste num padrão artificial, teste de retoma e treino curto do modelo Nano para validar integração
+
+A Fase 4 só será marcada como concluída depois de executar uma campanha de treino real do ZIKA-Nano, confirmar a evolução da loss e avaliar texto gerado. O pequeno conjunto de 81 conversas é apenas um corpus inicial, não uma base suficiente para um assistente abrangente.
+
 ## 7. Testes
 
 - **Gradiente numérico:** matmul, LayerNorm, GELU e softmax são comparados com diferenças finitas; o teste integrado também verifica gradientes de embeddings, atenção, MLP e LayerNorm do Transformer
-- **Sobreajuste:** o modelo tem de conseguir decorar um conjunto minúsculo antes de treinar a sério (critério da Fase 4)
+- **Sobreajuste:** o modelo minúsculo tem de reduzir a loss num padrão repetido; o teste também comprova retoma de checkpoint
 - **Ida e volta:** texto -> IDs -> texto preserva os caracteres; as conversas serializadas preservam os marcadores especiais; a preparação é determinística
 - **Dados:** registos inválidos, papéis fora de ordem, caracteres não suportados e ficheiros JSONL malformados são rejeitados
 - **Formato .zika:** exportar e voltar a carregar dá exatamente os mesmos bytes; ficheiros corrompidos, truncados e com versão errada são rejeitados

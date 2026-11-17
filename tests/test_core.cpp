@@ -122,6 +122,7 @@ void test_transformer_gradient() {
   Model model = tiny_model(), grads;
   const float loss = loss_and_backward(model, ids, targets, grads);
   CHECK(std::isfinite(loss) && loss > 0.0f);
+  CHECK(std::fabs(causal_loss(model, ids, targets) - loss) < 1.0e-6f);
   CHECK(forward_logits(model, ids).size() == ids.size() * model.cfg.vocab_size);
 
   const std::vector<std::pair<std::string, size_t>> samples = {
@@ -158,6 +159,19 @@ void test_adamw() {
   CHECK(stats.grad_norm > 0.0 && stats.clip_scale < 1.0f);
   const float expected = original - cfg.learning_rate * (gradient > 0.0f ? 1.0f : -1.0f);
   CHECK(std::fabs(model.tensors[emb_index].data[value_index] - expected) < 2.0e-5f);
+
+  // Serializar momentos e passo permite continuar AdamW sem alterar o update.
+  const std::vector<uint8_t> state = optimizer.save_state();
+  Model continuation = model;
+  AdamW restored_optimizer(continuation, cfg);
+  CHECK(restored_optimizer.load_state(state.data(), state.size(), continuation).empty());
+  CHECK(restored_optimizer.step_count() == optimizer.step_count());
+  Model next_gradients;
+  loss_and_backward(model, ids, targets, next_gradients);
+  optimizer.step(model, next_gradients);
+  restored_optimizer.step(continuation, next_gradients);
+  for (size_t ti = 0; ti < model.tensors.size(); ++ti)
+    CHECK(model.tensors[ti].data == continuation.tensors[ti].data);
 }
 
 } // namespace

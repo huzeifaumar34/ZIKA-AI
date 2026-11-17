@@ -2,7 +2,7 @@
 
 Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas de dados em Python e um chat web que correrá no próprio dispositivo.
 
-> **Estado: fase 3 concluída de 7.** Já existem o formato .zika, as operações numéricas, o Transformer com backpropagation, AdamW, tokenizer de caracteres e pipeline de dados JSONL. O loop de treino ainda não existe; será implementado na Fase 4. O plano completo está em docs/PLANO.md.
+> **Estado:** fases 1, 2 e 3 concluídas. O motor de treino da Fase 4 está implementado e validado com testes de sobreajuste e retoma; a campanha de treino do ZIKA-Nano ainda tem de ser executada e avaliada. O plano está em docs/PLANO.md.
 
 ## O que é
 
@@ -14,8 +14,8 @@ Não será equivalente aos grandes assistentes comerciais. Com poucos parâmetro
 
 | Parte | Linguagem | Função |
 |---|---|---|
-| core/ | C++ | Operações numéricas, Transformer, backpropagation e AdamW |
-| cli/ | C++ | Executável zika; atualmente version, init e info |
+| core/ | C++ | Operações numéricas, Transformer, backpropagation, AdamW e treino |
+| cli/ | C++ | Executável zika: version, init, info e train |
 | python/zika/ | Python padrão | Tokenizer, validação JSONL e preparação de dados |
 | python/tests/ | Python padrão | Testes do tokenizer e do pipeline de dados |
 | data/ | JSONL | Conversas originais para o primeiro corpus |
@@ -26,55 +26,77 @@ Não será equivalente aos grandes assistentes comerciais. Com poucos parâmetro
 - [x] 1. Esqueleto do projeto, CMake e formato .zika
 - [x] 2. Núcleo C++ com testes de gradiente
 - [x] 3. Dados e tokenizer de caracteres
-- [ ] 4. Treino do ZIKA-Nano
+- [ ] 4. Treino do ZIKA-Nano (motor implementado; campanha real em curso)
 - [ ] 5. Chat no terminal
 - [ ] 6. Chat web
 - [ ] 7. Treinar o ZIKA-Mini e quantizar (int8)
 
-## Fase 3: dados e tokenizer
+## Dados e tokenizer
 
 O tokenizer char-v0.1 contém exatamente 124 tokens, na mesma ordem do núcleo C++: três tokens especiais, quebra de linha, os 95 caracteres ASCII imprimíveis e 25 caracteres acentuados do português. A codificação e a descodificação são reversíveis; um caractere não suportado gera erro explícito em vez de ser apagado.
 
 O corpus inicial em data/dialogos.jsonl contém 81 conversas originais. Cada linha tem um objeto JSON com turnos alternados entre user e ia, começando em user e terminando em ia. O corpus é pequeno e serve para validar o pipeline e iniciar os primeiros testes de treino, não para representar todo o conhecimento da língua.
 
-Para preparar os dados, a partir da raiz do repositório:
+Preparar os dados localmente:
 
     PYTHONPATH=python python -m zika.data --input data/dialogos.jsonl --output-dir data/processed
 
-O comando cria:
-- train.bin e val.bin: IDs de token uint32 little-endian;
-- tokenizer.json: vocabulário e versão do tokenizer;
-- manifest.json: contagens, divisão, seed e hashes SHA-256.
+São criados train.bin e val.bin (IDs uint32 little-endian), tokenizer.json e manifest.json. Os dados processados não são versionados.
 
-A divisão treino/validação é determinística e feita ao nível da conversa, evitando que turnos da mesma conversa apareçam nos dois conjuntos. Os artefactos gerados ficam fora do Git.
+## Fase 4: motor de treino
 
-Para executar os testes Python:
+O comando zika train executa treino causal em batches com janelas aleatórias do corpus, acumulação de gradientes, AdamW, warm-up linear e decaimento cosseno. Mede a cross-entropy de treino e validação sem calcular gradientes durante a avaliação.
 
-    PYTHONPATH=python python -m unittest discover -s python/tests -v
+Exemplo de treino do ZIKA-Nano:
 
-O GitHub Actions executa os testes C++ e Python e prepara o corpus em cada push para main, pull request ou execução manual.
+    PYTHONPATH=python python -m zika.data --input data/dialogos.jsonl --output-dir data/processed
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --parallel 2
+    ./build/zika train \
+      --config configs/nano.json \
+      --data data/processed/train.bin \
+      --val-data data/processed/val.bin \
+      --out models/zika-nano.zika \
+      --steps 500 --batch-size 1 --seq-len 128
 
-## Modelos
+O programa cria também models/zika-nano.zika.ckpt. O checkpoint contém os pesos, os momentos do AdamW, o número do passo, o estado aleatório e as assinaturas CRC32 dos dois conjuntos de dados. Assim, só pode ser retomado com o mesmo corpus:
 
-| Modelo | Camadas | Dimensão | Cabeças | Contexto | Parâmetros | Objetivo |
-|---|---:|---:|---:|---:|---:|---|
-| ZIKA-Nano | 3 | 128 | 4 | 256 | 643 712 | Validar o treino em CPU |
-| ZIKA-Mini | 4 | 256 | 8 | 256 | 3 256 832 | Modelo maior, fase 7 |
+    ./build/zika train \
+      --config configs/nano.json \
+      --data data/processed/train.bin \
+      --val-data data/processed/val.bin \
+      --out models/zika-nano.zika \
+      --steps 1000 \
+      --resume models/zika-nano.zika.ckpt
 
-## Compilar o núcleo C++
+O argumento --steps é o passo total pretendido; ao retomar, tem de ser maior que o passo guardado. O modelo final é guardado em formato .zika; os checkpoints ficam fora do Git.
 
-Precisa de um compilador C++17 e CMake 3.16 ou superior. OpenMP é usado quando existe.
+### Treino na nuvem, sem PC
+
+No GitHub, abre **Actions → ZIKA-AI Train Nano → Run workflow**. Define o número total de passos, batch size, comprimento da sequência e seed. O artefacto zika-nano-training inclui o modelo, o checkpoint e o log. Para continuar um treino, usa o ID da execução anterior no campo resume_run_id; o checkpoint será descarregado automaticamente.
+
+A execução usa CPU. Não pressupõe GPU, não usa modelos pré-treinados e não transforma automaticamente o pequeno corpus de exemplo num assistente de grande escala. Começa com poucos passos para medir o tempo e a evolução da loss antes de aumentar a campanha.
+
+## Testes
+
+Compilar e executar todos os testes C++:
 
     cmake -S . -B build
     cmake --build build --parallel
     ctest --test-dir build --output-on-failure
 
-Criar e inspecionar um modelo vazio:
+Testes Python:
 
-    ./build/zika init --config configs/nano.json --out models/zika-nano.zika
-    ./build/zika info models/zika-nano.zika --tensors
+    PYTHONPATH=python python -m unittest discover -s python/tests -v
 
-O comando init cria pesos iniciais a zero, não treina o modelo. O treino real começa na Fase 4.
+O CI compila o núcleo, verifica os gradientes, testa que o modelo minúsculo consegue reduzir a loss e retomar de checkpoint, valida os dados e executa um treino curto do ZIKA-Nano para verificar a integração.
+
+## Modelos
+
+| Modelo | Camadas | Dimensão | Cabeças | Contexto | Parâmetros |
+|---|---:|---:|---:|---:|---:|
+| ZIKA-Nano | 3 | 128 | 4 | 256 | 643 712 |
+| ZIKA-Mini | 4 | 256 | 8 | 256 | 3 256 832 |
 
 ## Licença
 

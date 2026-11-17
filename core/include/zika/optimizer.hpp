@@ -1,4 +1,4 @@
-// Otimizador AdamW com clipping global de gradientes.
+// Otimizador AdamW com clipping global e estado serializavel para checkpoints.
 #pragma once
 
 #include "zika/format.hpp"
@@ -28,6 +28,11 @@ public:
   explicit AdamW(const Model &model, AdamWConfig config = {});
   OptimizerStats step(Model &model, const Model &gradients);
   uint64_t step_count() const noexcept { return step_; }
+  void set_learning_rate(float learning_rate);
+
+  // Estado little-endian com magic, versao e CRC32.
+  std::vector<uint8_t> save_state() const;
+  std::string load_state(const uint8_t *data, size_t size, const Model &model);
 
 private:
   AdamWConfig config_;

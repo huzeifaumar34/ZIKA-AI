@@ -15,6 +15,11 @@ void initialize_weights(Model &model, uint32_t seed = 1337);
 std::vector<float> forward_logits(const Model &model,
                                   const std::vector<uint32_t> &input_ids);
 
+// Cross-entropy causal sem gradientes, usada para avaliacao.
+float causal_loss(const Model &model,
+                  const std::vector<uint32_t> &input_ids,
+                  const std::vector<uint32_t> &targets);
+
 // Cross-entropy causal e gradientes completos dos parametros.
 // input_ids e targets têm o mesmo tamanho: cada posição prevê o token em targets.
 float loss_and_backward(const Model &model,

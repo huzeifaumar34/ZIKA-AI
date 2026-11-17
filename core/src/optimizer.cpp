@@ -1,6 +1,7 @@
 #include "zika/optimizer.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 
@@ -20,7 +21,48 @@ void check_compatible(const Model &model, const Model &grads) {
       throw std::invalid_argument("AdamW: tensor incompativel: " + p.name);
   }
 }
-}
+struct Writer {
+  std::vector<uint8_t> bytes;
+  void u32(uint32_t v) {
+    for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<uint8_t>(v >> (8 * i)));
+  }
+  void u64(uint64_t v) {
+    for (int i = 0; i < 8; ++i) bytes.push_back(static_cast<uint8_t>(v >> (8 * i)));
+  }
+  void f32(float f) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &f, sizeof(bits));
+    u32(bits);
+  }
+};
+struct Reader {
+  const uint8_t *p;
+  const uint8_t *end;
+  size_t left() const { return static_cast<size_t>(end - p); }
+  bool u32(uint32_t &v) {
+    if (left() < 4) return false;
+    v = static_cast<uint32_t>(p[0]) |
+        (static_cast<uint32_t>(p[1]) << 8) |
+        (static_cast<uint32_t>(p[2]) << 16) |
+        (static_cast<uint32_t>(p[3]) << 24);
+    p += 4;
+    return true;
+  }
+  bool u64(uint64_t &v) {
+    if (left() < 8) return false;
+    v = 0;
+    for (int i = 0; i < 8; ++i) v |= static_cast<uint64_t>(p[i]) << (8 * i);
+    p += 8;
+    return true;
+  }
+  bool f32(float &f) {
+    uint32_t bits = 0;
+    if (!u32(bits)) return false;
+    std::memcpy(&f, &bits, sizeof(f));
+    return true;
+  }
+};
+} // namespace
 
 AdamW::AdamW(const Model &model, AdamWConfig config) : config_(config) {
   if (!(config.learning_rate > 0.0f) ||
@@ -34,6 +76,12 @@ AdamW::AdamW(const Model &model, AdamWConfig config) : config_(config) {
     first_moment_.emplace_back(t.data.size(), 0.0f);
     second_moment_.emplace_back(t.data.size(), 0.0f);
   }
+}
+
+void AdamW::set_learning_rate(float learning_rate) {
+  if (!(learning_rate > 0.0f) || !std::isfinite(learning_rate))
+    throw std::invalid_argument("AdamW: learning_rate invalido");
+  config_.learning_rate = learning_rate;
 }
 
 OptimizerStats AdamW::step(Model &model, const Model &gradients) {
@@ -73,6 +121,67 @@ OptimizerStats AdamW::step(Model &model, const Model &gradients) {
     }
   }
   return {norm, scale, step_};
+}
+
+std::vector<uint8_t> AdamW::save_state() const {
+  Writer w;
+  w.bytes.insert(w.bytes.end(), {'Z', 'O', 'P', 'T'});
+  w.u32(1);
+  w.u64(step_);
+  w.u32(static_cast<uint32_t>(first_moment_.size()));
+  for (size_t i = 0; i < first_moment_.size(); ++i) {
+    w.u64(static_cast<uint64_t>(first_moment_[i].size()));
+    for (float v : first_moment_[i]) w.f32(v);
+    for (float v : second_moment_[i]) w.f32(v);
+  }
+  w.u32(crc32(w.bytes.data(), w.bytes.size()));
+  return std::move(w.bytes);
+}
+
+std::string AdamW::load_state(const uint8_t *data, size_t size, const Model &model) {
+  if (data == nullptr || size < 4 + 4 + 8 + 4 + 4)
+    return "AdamW: estado truncado";
+  if (std::memcmp(data, "ZOPT", 4) != 0)
+    return "AdamW: magic de estado invalida";
+  const uint8_t *tail = data + size - 4;
+  const uint32_t stored =
+      static_cast<uint32_t>(tail[0]) |
+      (static_cast<uint32_t>(tail[1]) << 8) |
+      (static_cast<uint32_t>(tail[2]) << 16) |
+      (static_cast<uint32_t>(tail[3]) << 24);
+  if (crc32(data, size - 4) != stored)
+    return "AdamW: checksum do estado invalido";
+
+  Reader r{data + 4, tail};
+  uint32_t version = 0, count = 0;
+  uint64_t step = 0;
+  if (!r.u32(version) || version != 1 || !r.u64(step) || !r.u32(count))
+    return "AdamW: cabecalho de estado invalido";
+  if (count != model.tensors.size() || count != first_moment_.size())
+    return "AdamW: quantidade de tensores do estado incompativel";
+
+  std::vector<std::vector<float>> first, second;
+  first.reserve(count);
+  second.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    uint64_t n = 0;
+    if (!r.u64(n) || n != model.tensors[i].data.size() ||
+        n > static_cast<uint64_t>(r.left() / 8))
+      return "AdamW: dimensao do estado incompativel";
+    first.emplace_back(static_cast<size_t>(n));
+    second.emplace_back(static_cast<size_t>(n));
+    for (float &v : first.back())
+      if (!r.f32(v) || !std::isfinite(v)) return "AdamW: primeiro momento invalido";
+    for (float &v : second.back())
+      if (!r.f32(v) || !std::isfinite(v) || v < 0.0f)
+        return "AdamW: segundo momento invalido";
+  }
+  if (r.left() != 0)
+    return "AdamW: dados inesperados no estado";
+  first_moment_ = std::move(first);
+  second_moment_ = std::move(second);
+  step_ = step;
+  return "";
 }
 
 } // namespace zika
