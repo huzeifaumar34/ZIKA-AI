@@ -126,8 +126,10 @@ void test_transformer_gradient() {
 
   const std::vector<std::pair<std::string, size_t>> samples = {
       {"tok_emb", 3}, {"pos_emb", 5}, {"layer0.attn.wqkv", 6},
-      {"layer0.attn.wo", 2}, {"layer0.mlp.w1", 9},
-      {"layer0.mlp.w2", 4}, {"lnf.g", 1}};
+      {"layer0.attn.wo", 2}, {"layer0.attn.bqkv", 5},
+      {"layer0.attn.bo", 1}, {"layer0.mlp.w1", 9},
+      {"layer0.mlp.b1", 3}, {"layer0.mlp.w2", 4},
+      {"layer0.mlp.b2", 2}, {"lnf.g", 1}, {"lnf.b", 1}};
   for (const auto &sample : samples) {
     size_t pi = 0;
     while (model.tensors[pi].name != sample.first) ++pi;

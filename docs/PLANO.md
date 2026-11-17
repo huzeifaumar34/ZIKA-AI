@@ -92,19 +92,19 @@ Os ficheiros de configuração (`configs/*.json`) são JSON plano com as chaves 
 | Fase | Entrega | Critério de conclusão |
 |---|---|---|
 | 1 (feita) | Esqueleto, CMake, formato `.zika` | Compila e escreve/lê um `.zika` vazio |
-| 2 | Núcleo C++ (ops, transformer, AdamW) | Testes de gradiente passam |
+| 2 (feita) | Núcleo C++ (ops, transformer, AdamW) | Testes de gradiente passam no CI |
 | 3 | Dados e tokenizer | Corpus gerado e tokenizado de ida e volta sem perdas |
 | 4 | Treino do ZIKA-Nano | A perda desce e o texto gerado parece português |
 | 5 | Chat no terminal | `zika chat` mantém uma conversa |
 | 6 | Chat web | Abre no telemóvel e responde offline |
 | 7 | ZIKA-Mini e int8 | Modelo maior treinado e exportado em tamanho reduzido |
 
-## 7. Testes
+### Implementação validada na fase 2\n\n- `core/src/ops.cpp`: multiplicação matricial, LayerNorm, GELU tanh-aproximada e softmax estável, cada uma com backward manual.\n- `core/src/transformer.cpp`: embeddings de token/posição, blocos pre-LN, atenção multi-cabeça causal, projeções QKV, MLP GELU, ligações residuais, LayerNorm final e weight tying entre `tok_emb` e a saída. Inclui cross-entropy causal e gradientes de todos os parâmetros.\n- `core/src/optimizer.cpp`: AdamW com momentos, correção de bias, weight decay desacoplado (exclui biases e ganhos de LayerNorm) e clipping pela norma global.\n- `initialize_weights`: inicialização determinística das matrizes e embeddings; `zika init` continua a gerar pesos zero para manter o comportamento documentado da fase 1.\n- CI: compilação C++17, testes CTest e smoke test do CLI em cada push para `main` e pull request.\n\n**Ainda não faz parte da fase 2:** ciclo completo de treino por épocas/lotes, scheduler warm-up/cosseno, checkpoints, KV cache e amostragem de geração. Esses itens permanecem no plano para as fases de treino e inferência.\n\n## 7. Testes
 
-- **Gradiente numérico:** cada operação com *backprop* é comparada com diferenças finitas
-- **Sobreajuste:** o modelo tem de conseguir decorar um conjunto minúsculo antes de treinar a sério
+- **Gradiente numérico:** as operações `matmul`, LayerNorm, GELU e softmax são comparadas com diferenças finitas; o teste integrado também verifica gradientes de embeddings, atenção, MLP e LayerNorm do Transformer
+- **Sobreajuste:** o modelo tem de conseguir decorar um conjunto minúsculo antes de treinar a sério (critério da fase 4, quando existir o loop de treino)
 - **Ida e volta:** exportar para `.zika` e voltar a carregar dá exatamente os mesmos bytes (já testado na fase 1, incluindo ficheiros corrompidos, truncados e com versão errada; os testes também correm com ASan e UBSan)
-- **Paridade:** C++ e JavaScript produzem os mesmos *logits* para a mesma entrada
+- **Paridade:** C++ e JavaScript produzem os mesmos *logits* para a mesma entrada (critério da fase 6, quando existir o runtime web)
 
 ## 8. Riscos e limites
 

@@ -2,7 +2,7 @@
 
 Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas em Python e um chat web que corre o modelo no próprio dispositivo.
 
-> **Estado: fase 1 concluída de 7.** Já existem o esqueleto em C++, o formato de ficheiro `.zika` e o CLI mínimo (`version`, `init`, `info`). O treino e o chat ainda **não existem**. O plano completo está em [`docs/PLANO.md`](docs/PLANO.md).
+> **Estado: fase 2 concluída de 7.** Já existem o formato `.zika`, as operações numéricas, o forward/backpropagation do Transformer e o otimizador AdamW. O loop de treino, tokenizer/dados e chats ainda **não existem**. O plano completo está em [`docs/PLANO.md`](docs/PLANO.md).
 
 ## O que é
 
@@ -14,7 +14,7 @@ Não vai ser o ChatGPT. O objetivo é aprender e controlar tudo: dos tensores à
 
 | Parte | Linguagem | Função |
 |---|---|---|
-| `core/` | C++ | Tensores, matmul (AVX2 + OpenMP), transformer com *backprop* manual, AdamW, treino e inferência |
+| `core/` | C++ | Operações matriciais, Transformer decoder-only com *backprop* manual, AdamW e inferência por sequência |
 | `cli/` | C++ | Executável `zika` (hoje: `version`, `init`, `info`; previsto: `train`, `chat`, `export`) |
 | `python/` | Python | Preparação de dados, tokenizer, avaliação, ligação ao núcleo por `ctypes` |
 | `web/` | HTML + JavaScript | Chat que corre o modelo no navegador, offline, lendo o ficheiro `.zika` |
@@ -30,7 +30,7 @@ ZIKA-AI/
   configs/  (nano.json, mini.json)
   data/     (diálogos e texto de treino)
   models/   (pesos .zika, não vão para o Git)
-  tests/    (formato hoje; testes de gradiente na fase 2)
+  tests/    (formato .zika e gradientes numéricos do núcleo)
   docs/     (plano e notas)
   CMakeLists.txt
 ```
@@ -59,14 +59,14 @@ O modelo é treinado com diálogos neste formato:
 ## Fases
 
 - [x] 1. Esqueleto do projeto, CMake e formato `.zika`
-- [ ] 2. Núcleo C++ com testes de gradiente
+- [x] 2. Núcleo C++ com testes de gradiente
 - [ ] 3. Dados e tokenizer
 - [ ] 4. Treinar o ZIKA-Nano
 - [ ] 5. Chat no terminal
 - [ ] 6. Chat web
 - [ ] 7. Treinar o ZIKA-Mini e quantizar (int8)
 
-## Como usar
+## Fase 2 implementada\n\n- `core/src/ops.cpp`: `matmul`, LayerNorm, GELU e softmax estável, com gradientes manuais.\n- `core/src/transformer.cpp`: embeddings, blocos pre-LN, atenção multi-cabeça causal, MLP GELU, residuals, pesos partilhados (`tok_emb`) e cross-entropy causal.\n- `core/src/optimizer.cpp`: AdamW, correção de bias, weight decay desacoplado e clipping global de gradientes.\n- `initialize_weights`: inicialização determinística dos pesos.\n- `tests/test_core.cpp`: diferenças finitas para operações e parâmetros selecionados do Transformer, além do teste do AdamW.\n\nO treino em lotes, scheduler, checkpoints, tokenizer e interface de chat continuam reservados às fases seguintes.\n\n## Como usar
 
 Precisa de um compilador C++17 e de CMake 3.16 ou superior. O OpenMP é usado se existir.
 
