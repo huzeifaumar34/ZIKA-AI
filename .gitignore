@@ -1,4 +1,4 @@
-# Compilação
+# Compilacao
 build/
 cmake-build-*/
 *.o
@@ -19,8 +19,9 @@ models/*.zika
 *.ckpt
 checkpoints/
 
-# Dados grandes
+# Dados processados e dados grandes
 data/raw/
+data/processed/
 data/*.bin
 
 # Editores e sistema

@@ -19,10 +19,10 @@ namespace zika {
 
 constexpr uint32_t kFormatVersion = 1;
 
-// Só F32 está implementado; F16 e I8 ficam reservados (fase 7).
+// Só F32 está implementado; F16 e I8 ficam reservados para a fase 7.
 enum class DType : uint32_t { F32 = 0, F16 = 1, I8 = 2 };
 
-// BPE fica reservado para a fase 3.
+// Char v0.1 está implementado; BPE é uma melhoria futura.
 enum class TokenizerKind : uint32_t { Char = 0, BPE = 1 };
 
 struct Config {
@@ -37,7 +37,7 @@ struct Config {
 struct Tokenizer {
   TokenizerKind kind = TokenizerKind::Char;
   std::vector<std::string> tokens;                   // id -> bytes do token
-  std::vector<std::pair<uint32_t, uint32_t>> merges; // regras BPE (fase 3)
+  std::vector<std::pair<uint32_t, uint32_t>> merges; // regras BPE
 };
 
 struct Tensor {

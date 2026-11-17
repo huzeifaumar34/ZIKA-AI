@@ -1,92 +1,81 @@
 # ZIKA-AI
 
-Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas em Python e um chat web que corre o modelo no próprio dispositivo.
+Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas de dados em Python e um chat web que correrá no próprio dispositivo.
 
-> **Estado: fase 2 concluída de 7.** Já existem o formato `.zika`, as operações numéricas, o forward/backpropagation do Transformer e o otimizador AdamW. O loop de treino, tokenizer/dados e chats ainda **não existem**. O plano completo está em [`docs/PLANO.md`](docs/PLANO.md).
+> **Estado: fase 3 concluída de 7.** Já existem o formato .zika, as operações numéricas, o Transformer com backpropagation, AdamW, tokenizer de caracteres e pipeline de dados JSONL. O loop de treino ainda não existe; será implementado na Fase 4. O plano completo está em docs/PLANO.md.
 
 ## O que é
 
-O ZIKA-AI é um pequeno modelo de linguagem do tipo GPT (transformer *decoder-only*) que gera texto e conversa em português (de Portugal ou do Brasil), sobre conversa geral.
+O ZIKA-AI é um pequeno modelo de linguagem do tipo GPT (Transformer decoder-only) orientado para conversas em português. O objetivo é aprender e controlar tudo: dos tensores à interface de chat, sem PyTorch, TensorFlow ou outras bibliotecas de IA.
 
-Não vai ser o ChatGPT. O objetivo é aprender e controlar tudo: dos tensores à interface de chat, sem PyTorch nem outras bibliotecas de IA. Com poucos dados e poucos parâmetros, o modelo escreve português plausível e responde ao básico, mas não "sabe" coisas como os grandes modelos.
+Não será equivalente aos grandes assistentes comerciais. Com poucos parâmetros e dados, o modelo terá capacidade limitada, poderá repetir respostas e cometer erros.
 
 ## Arquitetura
 
 | Parte | Linguagem | Função |
 |---|---|---|
-| `core/` | C++ | Operações matriciais, Transformer decoder-only com *backprop* manual, AdamW e inferência por sequência |
-| `cli/` | C++ | Executável `zika` (hoje: `version`, `init`, `info`; previsto: `train`, `chat`, `export`) |
-| `python/` | Python | Preparação de dados, tokenizer, avaliação, ligação ao núcleo por `ctypes` |
-| `web/` | HTML + JavaScript | Chat que corre o modelo no navegador, offline, lendo o ficheiro `.zika` |
+| core/ | C++ | Operações numéricas, Transformer, backpropagation e AdamW |
+| cli/ | C++ | Executável zika; atualmente version, init e info |
+| python/zika/ | Python padrão | Tokenizer, validação JSONL e preparação de dados |
+| python/tests/ | Python padrão | Testes do tokenizer e do pipeline de dados |
+| data/ | JSONL | Conversas originais para o primeiro corpus |
+| web/ | HTML + JavaScript | Chat offline previsto para a Fase 6 |
 
-## Estrutura prevista
+## Estado das fases
 
-```
-ZIKA-AI/
-  core/     (C++: ops, transformer, treino, inferência)
-  cli/      (executável zika)
-  python/   (dados, tokenizer, bindings)
-  web/      (chat HTML + JS)
-  configs/  (nano.json, mini.json)
-  data/     (diálogos e texto de treino)
-  models/   (pesos .zika, não vão para o Git)
-  tests/    (formato .zika e gradientes numéricos do núcleo)
-  docs/     (plano e notas)
-  CMakeLists.txt
-```
-
-`python/`, `web/` e `data/` aparecem nas fases 3 a 6.
-
-## Modelos
-
-Tudo é definido por ficheiros de configuração, por isso mudar de tamanho não obriga a mudar código.
-
-| Modelo | Camadas | Dimensão | Cabeças | Contexto | Parâmetros | Objetivo |
-|---|---|---|---|---|---|---|
-| ZIKA-Nano | 3 | 128 | 4 | 256 | 0,64 M | Validar o motor, treina em minutos |
-| ZIKA-Mini | 4 | 256 | 8 | 256 | 3,26 M | O modelo "real", treina em horas |
-
-Tokenizer: começa letra a letra (124 tokens) e passa a BPE (~1000 tokens) mais tarde; com BPE o Mini sobe para ~3,5 M parâmetros.
-
-## Formato do chat
-
-O modelo é treinado com diálogos neste formato:
-
-```
-<|user|> Olá, tudo bem? <|ia|> Olá! Tudo bem, e contigo? <|fim|>
-```
-
-## Fases
-
-- [x] 1. Esqueleto do projeto, CMake e formato `.zika`
+- [x] 1. Esqueleto do projeto, CMake e formato .zika
 - [x] 2. Núcleo C++ com testes de gradiente
-- [ ] 3. Dados e tokenizer
-- [ ] 4. Treinar o ZIKA-Nano
+- [x] 3. Dados e tokenizer de caracteres
+- [ ] 4. Treino do ZIKA-Nano
 - [ ] 5. Chat no terminal
 - [ ] 6. Chat web
 - [ ] 7. Treinar o ZIKA-Mini e quantizar (int8)
 
-## Fase 2 implementada\n\n- `core/src/ops.cpp`: `matmul`, LayerNorm, GELU e softmax estável, com gradientes manuais.\n- `core/src/transformer.cpp`: embeddings, blocos pre-LN, atenção multi-cabeça causal, MLP GELU, residuals, pesos partilhados (`tok_emb`) e cross-entropy causal.\n- `core/src/optimizer.cpp`: AdamW, correção de bias, weight decay desacoplado e clipping global de gradientes.\n- `initialize_weights`: inicialização determinística dos pesos.\n- `tests/test_core.cpp`: diferenças finitas para operações e parâmetros selecionados do Transformer, além do teste do AdamW.\n\nO treino em lotes, scheduler, checkpoints, tokenizer e interface de chat continuam reservados às fases seguintes.\n\n## Como usar
+## Fase 3: dados e tokenizer
 
-Precisa de um compilador C++17 e de CMake 3.16 ou superior. O OpenMP é usado se existir.
+O tokenizer char-v0.1 contém exatamente 124 tokens, na mesma ordem do núcleo C++: três tokens especiais, quebra de linha, os 95 caracteres ASCII imprimíveis e 25 caracteres acentuados do português. A codificação e a descodificação são reversíveis; um caractere não suportado gera erro explícito em vez de ser apagado.
 
-```bash
-cmake -B build && cmake --build build -j
-ctest --test-dir build --output-on-failure      # corre os testes
+O corpus inicial em data/dialogos.jsonl contém 81 conversas originais. Cada linha tem um objeto JSON com turnos alternados entre user e ia, começando em user e terminando em ia. O corpus é pequeno e serve para validar o pipeline e iniciar os primeiros testes de treino, não para representar todo o conhecimento da língua.
 
-./build/zika init --config configs/nano.json --out models/zika-nano.zika
-./build/zika info models/zika-nano.zika --tensors
-```
+Para preparar os dados, a partir da raiz do repositório:
 
-`init` cria um modelo com os pesos a zero (o treino chega na fase 4). Por omissão compila-se com `-march=native`; para um binário portátil use `-DZIKA_NATIVE=OFF`.
+    PYTHONPATH=python python -m zika.data --input data/dialogos.jsonl --output-dir data/processed
 
-Previsto para as próximas fases (**ainda não existe**):
+O comando cria:
+- train.bin e val.bin: IDs de token uint32 little-endian;
+- tokenizer.json: vocabulário e versão do tokenizer;
+- manifest.json: contagens, divisão, seed e hashes SHA-256.
 
-```bash
-./build/zika train --config configs/nano.json --data data/dialogos.jsonl
-./build/zika chat --model models/zika-nano.zika
-```
+A divisão treino/validação é determinística e feita ao nível da conversa, evitando que turnos da mesma conversa apareçam nos dois conjuntos. Os artefactos gerados ficam fora do Git.
+
+Para executar os testes Python:
+
+    PYTHONPATH=python python -m unittest discover -s python/tests -v
+
+O GitHub Actions executa os testes C++ e Python e prepara o corpus em cada push para main, pull request ou execução manual.
+
+## Modelos
+
+| Modelo | Camadas | Dimensão | Cabeças | Contexto | Parâmetros | Objetivo |
+|---|---:|---:|---:|---:|---:|---|
+| ZIKA-Nano | 3 | 128 | 4 | 256 | 643 712 | Validar o treino em CPU |
+| ZIKA-Mini | 4 | 256 | 8 | 256 | 3 256 832 | Modelo maior, fase 7 |
+
+## Compilar o núcleo C++
+
+Precisa de um compilador C++17 e CMake 3.16 ou superior. OpenMP é usado quando existe.
+
+    cmake -S . -B build
+    cmake --build build --parallel
+    ctest --test-dir build --output-on-failure
+
+Criar e inspecionar um modelo vazio:
+
+    ./build/zika init --config configs/nano.json --out models/zika-nano.zika
+    ./build/zika info models/zika-nano.zika --tensors
+
+O comando init cria pesos iniciais a zero, não treina o modelo. O treino real começa na Fase 4.
 
 ## Licença
 
-[MIT](LICENSE)
+MIT.

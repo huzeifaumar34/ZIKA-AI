@@ -11,14 +11,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
+
+      - name: Configure C++
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DZIKA_NATIVE=OFF
-      - name: Build
+
+      - name: Build C++
         run: cmake --build build --parallel 2
-      - name: Test
+
+      - name: C++ tests
         run: ctest --test-dir build --output-on-failure
+
       - name: CLI smoke test
         run: |
           ./build/zika version
           ./build/zika init --config configs/nano.json --out /tmp/zika-nano.zika
           ./build/zika info /tmp/zika-nano.zika
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python unit tests
+        env:
+          PYTHONPATH: python
+        run: python -m unittest discover -s python/tests -v
+
+      - name: Prepare and validate sample corpus
+        env:
+          PYTHONPATH: python
+        run: |
+          python -m zika.data \
+            --input data/dialogos.jsonl \
+            --output-dir "$RUNNER_TEMP/zika-data"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import struct
+          root = Path(os.environ["RUNNER_TEMP"]) / "zika-data"
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          assert manifest["vocab_size"] == 124
+          assert manifest["train"]["conversations"] > 0
+          assert manifest["validation"]["conversations"] > 0
+          for name in ("train.bin", "val.bin"):
+              payload = (root / name).read_bytes()
+              assert len(payload) % 4 == 0
+              assert payload
+              struct.unpack("<I", payload[:4])
+          print("Dataset validado:", manifest["train"]["tokens"], "tokens de treino;",
+                manifest["validation"]["tokens"], "tokens de validacao")
+          PY
