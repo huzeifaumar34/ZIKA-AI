@@ -61,3 +61,11 @@ jobs:
           print("Dataset validado:", manifest["train"]["tokens"], "tokens de treino;",
                 manifest["validation"]["tokens"], "tokens de validacao")
           PY
+
+      - name: Upload processed dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: zika-phase3-dataset
+          path: ${{ runner.temp }}/zika-data/
+          if-no-files-found: error
+          retention-days: 14
