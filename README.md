@@ -2,7 +2,7 @@
 
 Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas de dados em Python e um chat web que correrá no próprio dispositivo.
 
-> **Estado:** fases 1, 2 e 3 concluídas. O motor de treino da Fase 4 está implementado e validado com testes de sobreajuste e retoma; a campanha de treino do ZIKA-Nano ainda tem de ser executada e avaliada. O plano está em docs/PLANO.md.
+> **Estado:** fases 1, 2 e 3 concluídas. A campanha real do ZIKA-Nano (500 passos) foi executada: a loss de validação caiu de 4,815 para 2,527. A Fase 4 aguarda avaliação qualitativa de texto. A implementação inicial da Fase 5 está na branch `phase5-inference-chat`, com CI aprovado; falta testar respostas do modelo no dispositivo. O plano está em docs/PLANO.md.
 
 ## O que é
 
@@ -15,7 +15,7 @@ Não será equivalente aos grandes assistentes comerciais. Com poucos parâmetro
 | Parte | Linguagem | Função |
 |---|---|---|
 | core/ | C++ | Operações numéricas, Transformer, backpropagation, AdamW e treino |
-| cli/ | C++ | Executável zika: version, init, info e train |
+| cli/ | C++ | Executável zika: version, init, info, train e chat |
 | python/zika/ | Python padrão | Tokenizer, validação JSONL e preparação de dados |
 | python/tests/ | Python padrão | Testes do tokenizer e do pipeline de dados |
 | data/ | JSONL | Conversas originais para o primeiro corpus |
@@ -27,7 +27,7 @@ Não será equivalente aos grandes assistentes comerciais. Com poucos parâmetro
 - [x] 2. Núcleo C++ com testes de gradiente
 - [x] 3. Dados e tokenizer de caracteres
 - [ ] 4. Treino do ZIKA-Nano (motor implementado; campanha real em curso)
-- [ ] 5. Chat no terminal
+- [ ] 5. Chat no terminal (implementação inicial na branch `phase5-inference-chat`; teste com modelo real pendente)
 - [ ] 6. Chat web
 - [ ] 7. Treinar o ZIKA-Mini e quantizar (int8)
 
@@ -76,6 +76,16 @@ O argumento --steps é o passo total pretendido; ao retomar, tem de ser maior qu
 No GitHub, abre **Actions → ZIKA-AI Train Nano → Run workflow**. Define o número total de passos, batch size, comprimento da sequência e seed. O artefacto zika-nano-training inclui o modelo, o checkpoint e o log. Para continuar um treino, usa o ID da execução anterior no campo resume_run_id; o checkpoint será descarregado automaticamente.
 
 A execução usa CPU. Não pressupõe GPU, não usa modelos pré-treinados e não transforma automaticamente o pequeno corpus de exemplo num assistente de grande escala. Começa com poucos passos para medir o tempo e a evolução da loss antes de aumentar a campanha.
+
+## Fase 5: inferência e chat no terminal (em validação)
+
+A branch `phase5-inference-chat` adiciona o tokenizer C++ compatível com char-v0.1, geração autoregressiva com temperatura, Top-K e Top-P, e a interface interativa `zika chat`. A cada token, a inferência recalcula a janela de contexto inteira; KV cache fica para uma otimização posterior.
+
+Depois de integrar a branch e compilar:
+
+    ./build/zika chat --model /caminho/zika-nano.zika
+
+Opções disponíveis: `--max-new-tokens`, `--temperature`, `--top-k`, `--top-p` e `--seed`. O teste de conversa com o ZIKA-Nano treinado ainda é necessário para avaliar a qualidade real das respostas.
 
 ## Testes
 
