@@ -18,6 +18,9 @@ find_package(OpenMP)
 add_library(zika_core STATIC
   core/src/format.cpp
   core/src/spec.cpp
+  core/src/ops.cpp
+  core/src/transformer.cpp
+  core/src/optimizer.cpp
 )
 target_include_directories(zika_core PUBLIC core/include)
 
@@ -43,4 +46,8 @@ if(ZIKA_BUILD_TESTS)
   add_executable(zika_tests tests/test_format.cpp)
   target_link_libraries(zika_tests PRIVATE zika_core)
   add_test(NAME formato COMMAND zika_tests)
+
+  add_executable(zika_core_tests tests/test_core.cpp)
+  target_link_libraries(zika_core_tests PRIVATE zika_core)
+  add_test(NAME core_gradients COMMAND zika_core_tests)
 endif()
