@@ -11,6 +11,8 @@
 #include "zika/training.hpp"
 #include "zika/transformer.hpp"
 
+int cmd_chat(int argc, char **argv);
+
 #ifndef ZIKA_VERSION
 #define ZIKA_VERSION "dev"
 #endif
@@ -27,7 +29,14 @@ void usage() {
                "  zika init --config <ficheiro.json> --out <modelo.zika>\n"
                "  zika info <modelo.zika> [--tensors]\n"
                "  zika train --config <ficheiro.json> --data <train.bin>\n"
-               "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n\n"
+               "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n"
+               "  zika chat --model <modelo.zika> [opcoes]\n\n"
+               "Opcoes de chat:\n"
+               "  --max-new-tokens N     maximo de tokens por resposta (default 160)\n"
+               "  --temperature F        temperatura (default 0.8)\n"
+               "  --top-k N              candidatos por passo; 0 desativa (default 40)\n"
+               "  --top-p F              nucleus sampling (default 0.9)\n"
+               "  --seed N               semente da amostragem (default 1337)\n\n"
                "Opcoes de treino:\n"
                "  --steps N              passos totais (default 500)\n"
                "  --batch-size N         sequencias por passo (default 1)\n"
@@ -282,6 +291,7 @@ int main(int argc, char **argv) {
   if (cmd == "init") return cmd_init(argc, argv);
   if (cmd == "info") return cmd_info(argc, argv);
   if (cmd == "train") return cmd_train(argc, argv);
+  if (cmd == "chat") return cmd_chat(argc, argv);
   if (cmd == "help" || cmd == "--help" || cmd == "-h") {
     usage();
     return 0;
