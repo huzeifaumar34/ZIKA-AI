@@ -141,16 +141,21 @@ void test_transformer_gradient() {
 void test_adamw() {
   Model model = tiny_model(), grads;
   const std::vector<uint32_t> ids = {0, 1, 2}, targets = {1, 2, 3};
-  const float before = model_loss(model, ids, targets);
   loss_and_backward(model, ids, targets, grads);
+  const size_t emb_index = 0; // tok_emb é o primeiro tensor na ordem do formato.
+  const size_t value_index = 3;
+  const float original = model.tensors[emb_index].data[value_index];
+  const float gradient = grads.tensors[emb_index].data[value_index];
+  CHECK(std::fabs(gradient) > 1.0e-8f);
+
   AdamWConfig cfg;
   cfg.learning_rate = 0.02f; cfg.weight_decay = 0.0f; cfg.max_grad_norm = 0.05f;
   AdamW optimizer(model, cfg);
   const OptimizerStats stats = optimizer.step(model, grads);
-  const float after = model_loss(model, ids, targets);
   CHECK(stats.step == 1 && optimizer.step_count() == 1);
   CHECK(stats.grad_norm > 0.0 && stats.clip_scale < 1.0f);
-  CHECK(after < before);
+  const float expected = original - cfg.learning_rate * (gradient > 0.0f ? 1.0f : -1.0f);
+  CHECK(std::fabs(model.tensors[emb_index].data[value_index] - expected) < 2.0e-5f);
 }
 
 } // namespace

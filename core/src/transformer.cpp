@@ -20,6 +20,9 @@ size_t param_index(const Model &model, const std::string &name) {
     if (model.tensors[i].name == name) return i;
   throw std::invalid_argument("parametro ausente no modelo: " + name);
 }
+const Tensor &param(const Model &model, const char *name) {
+  return model.tensors[param_index(model, std::string(name))];
+}
 const Tensor &param(const Model &model, const std::string &name) {
   return model.tensors[param_index(model, name)];
 }
