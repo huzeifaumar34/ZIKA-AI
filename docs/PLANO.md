@@ -100,7 +100,7 @@ Os ficheiros de configuração (configs/*.json) são JSON plano com as chaves na
 | 2 (feita) | Núcleo C++ (ops, transformer, AdamW) | Testes de gradiente passam no CI |
 | 3 (feita) | Corpus, tokenizer char-v0.1, pipeline JSONL | Corpus gerado e tokenizado de ida e volta sem perdas |
 | 4 (em curso) | Treino do ZIKA-Nano | Treino real do Nano, loss de validação acompanhada e amostra de texto avaliada |
-| 5 | Chat no terminal | zika chat mantém uma conversa |
+| 5 (em validação) | Chat no terminal | zika chat mantém uma conversa com o modelo treinado, sem respostas pré-programadas |
 | 6 | Chat web | Abre no telemóvel e responde offline |
 | 7 | ZIKA-Mini e int8 | Modelo maior treinado e exportado em tamanho reduzido |
 
@@ -147,3 +147,13 @@ A Fase 4 só será marcada como concluída depois de executar uma campanha de tr
 - O tokenizer char consome mais posições de contexto do que BPE; BPE fica para uma melhoria futura
 - O corpus atual é pequeno e pedagógico; não deve ser interpretado como modelo já treinado nem como cobertura completa do português
 - Os modelos pequenos podem repetir-se; a amostragem ajuda, mas não resolve essa limitação
+
+
+### Implementação inicial da Fase 5 (branch phase5-inference-chat)
+
+- `core/src/generation.cpp`: codificação/descodificação UTF-8 para o tokenizer de caracteres, geração autoregressiva usando `forward_logits` e amostragem por temperatura, Top-K e Top-P.
+- `cli/chat.cpp`: sessão interativa `zika chat --model <modelo.zika>`, com histórico limitado ao contexto do modelo e encerramento por marcador especial.
+- `tests/test_generation.cpp`: testes de tokenizer, restrição Top-K, validação de parâmetros e geração.
+- CI do PR #1: compilação, CTest (incluindo geração), testes Python e smoke test de treino passaram.
+- Limitação deliberada da primeira versão: recalcula o forward para a janela toda a cada token; KV cache e otimização de desempenho ficam para uma iteração futura.
+- Critério ainda pendente: testar o chat com o artefacto real do ZIKA-Nano no dispositivo e avaliar a qualidade das respostas. Não marcar a fase como concluída antes disso.
