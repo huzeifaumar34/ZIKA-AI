@@ -2,7 +2,7 @@
 
 Uma mini IA de conversa em português, construída **do zero**: motor de treino e inferência em C++, ferramentas em Python e um chat web que corre o modelo no próprio dispositivo.
 
-> **Estado: planeamento.** Ainda não há código. Este repositório contém, por agora, o plano e a documentação. As fases estão em [`docs/PLANO.md`](docs/PLANO.md).
+> **Estado: fase 1 concluída de 7.** Já existem o esqueleto em C++, o formato de ficheiro `.zika` e o CLI mínimo (`version`, `init`, `info`). O treino e o chat ainda **não existem**. O plano completo está em [`docs/PLANO.md`](docs/PLANO.md).
 
 ## O que é
 
@@ -15,7 +15,7 @@ Não vai ser o ChatGPT. O objetivo é aprender e controlar tudo: dos tensores à
 | Parte | Linguagem | Função |
 |---|---|---|
 | `core/` | C++ | Tensores, matmul (AVX2 + OpenMP), transformer com *backprop* manual, AdamW, treino e inferência |
-| `cli/` | C++ | Executável `zika` (`train`, `chat`, `export`) |
+| `cli/` | C++ | Executável `zika` (hoje: `version`, `init`, `info`; previsto: `train`, `chat`, `export`) |
 | `python/` | Python | Preparação de dados, tokenizer, avaliação, ligação ao núcleo por `ctypes` |
 | `web/` | HTML + JavaScript | Chat que corre o modelo no navegador, offline, lendo o ficheiro `.zika` |
 
@@ -27,12 +27,15 @@ ZIKA-AI/
   cli/      (executável zika)
   python/   (dados, tokenizer, bindings)
   web/      (chat HTML + JS)
+  configs/  (nano.json, mini.json)
   data/     (diálogos e texto de treino)
-  models/   (pesos .zika)
-  tests/    (incluindo testes de gradiente)
+  models/   (pesos .zika, não vão para o Git)
+  tests/    (formato hoje; testes de gradiente na fase 2)
   docs/     (plano e notas)
   CMakeLists.txt
 ```
+
+`python/`, `web/` e `data/` aparecem nas fases 3 a 6.
 
 ## Modelos
 
@@ -40,10 +43,10 @@ Tudo é definido por ficheiros de configuração, por isso mudar de tamanho não
 
 | Modelo | Camadas | Dimensão | Cabeças | Contexto | Parâmetros | Objetivo |
 |---|---|---|---|---|---|---|
-| ZIKA-Nano | 3 | 128 | 4 | 256 | ~0,6 M | Validar o motor, treina em minutos |
-| ZIKA-Mini | 4 | 256 | 8 | 256 | ~3,5 M | O modelo "real", treina em horas |
+| ZIKA-Nano | 3 | 128 | 4 | 256 | 0,64 M | Validar o motor, treina em minutos |
+| ZIKA-Mini | 4 | 256 | 8 | 256 | 3,26 M | O modelo "real", treina em horas |
 
-Tokenizer: começa letra a letra e passa a BPE (~1000 tokens) mais tarde.
+Tokenizer: começa letra a letra (124 tokens) e passa a BPE (~1000 tokens) mais tarde; com BPE o Mini sobe para ~3,5 M parâmetros.
 
 ## Formato do chat
 
@@ -55,7 +58,7 @@ O modelo é treinado com diálogos neste formato:
 
 ## Fases
 
-- [ ] 1. Esqueleto do projeto, CMake e formato `.zika`
+- [x] 1. Esqueleto do projeto, CMake e formato `.zika`
 - [ ] 2. Núcleo C++ com testes de gradiente
 - [ ] 3. Dados e tokenizer
 - [ ] 4. Treinar o ZIKA-Nano
@@ -63,12 +66,23 @@ O modelo é treinado com diálogos neste formato:
 - [ ] 6. Chat web
 - [ ] 7. Treinar o ZIKA-Mini e quantizar (int8)
 
-## Como vai ser usado (previsto)
+## Como usar
 
-Estes comandos ainda **não existem**; mostram a direção:
+Precisa de um compilador C++17 e de CMake 3.16 ou superior. O OpenMP é usado se existir.
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+cmake -B build && cmake --build build -j
+ctest --test-dir build --output-on-failure      # corre os testes
+
+./build/zika init --config configs/nano.json --out models/zika-nano.zika
+./build/zika info models/zika-nano.zika --tensors
+```
+
+`init` cria um modelo com os pesos a zero (o treino chega na fase 4). Por omissão compila-se com `-march=native`; para um binário portátil use `-DZIKA_NATIVE=OFF`.
+
+Previsto para as próximas fases (**ainda não existe**):
+
+```bash
 ./build/zika train --config configs/nano.json --data data/dialogos.jsonl
 ./build/zika chat --model models/zika-nano.zika
 ```

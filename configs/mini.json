@@ -1,0 +1,9 @@
+{
+  "name": "zika-mini",
+  "tokenizer": "char",
+  "n_layers": 4,
+  "d_model": 256,
+  "n_heads": 8,
+  "d_ff": 1024,
+  "ctx_len": 256
+}
