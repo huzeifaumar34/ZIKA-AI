@@ -2,12 +2,16 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <random>
+#include <sstream>
 #include <string>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "zika/format.hpp"
+#include "zika/optimizer.hpp"
 #include "zika/training.hpp"
 #include "zika/transformer.hpp"
 
@@ -245,6 +249,106 @@ void test_checkpoint_extension_is_smooth_and_data_bound() {
   std::filesystem::remove_all(root);
 }
 
+
+void put_u32(std::vector<uint8_t> &out, uint32_t value) {
+  for (int i = 0; i < 4; ++i)
+    out.push_back(static_cast<uint8_t>(value >> (8 * i)));
+}
+
+void put_u64(std::vector<uint8_t> &out, uint64_t value) {
+  for (int i = 0; i < 8; ++i)
+    out.push_back(static_cast<uint8_t>(value >> (8 * i)));
+}
+
+uint32_t hash_tokens(const std::vector<uint32_t> &tokens) {
+  std::vector<uint8_t> bytes;
+  for (uint32_t value : tokens) put_u32(bytes, value);
+  return crc32(bytes.data(), bytes.size());
+}
+
+bool write_legacy_checkpoint(const std::string &path, const Model &model,
+                             const std::vector<uint32_t> &train,
+                             const std::vector<uint32_t> &validation,
+                             const TrainingConfig &cfg) {
+  std::string error;
+  const auto model_bytes = serialize(model, error);
+  if (!error.empty()) return false;
+  AdamWConfig adam_cfg;
+  adam_cfg.learning_rate = cfg.learning_rate;
+  adam_cfg.weight_decay = cfg.weight_decay;
+  adam_cfg.max_grad_norm = cfg.max_grad_norm;
+  AdamW optimizer(model, adam_cfg);
+  std::mt19937 rng(cfg.seed);
+  std::ostringstream rng_stream;
+  rng_stream << rng;
+  const std::string rng_text = rng_stream.str();
+
+  std::vector<uint8_t> bytes{'Z', 'C', 'K', 'P'};
+  put_u32(bytes, 1); // Legacy ZCKP v1
+  put_u64(bytes, 0); // step
+  put_u32(bytes, hash_tokens(train));
+  put_u32(bytes, hash_tokens(validation));
+  const auto optimizer_bytes = optimizer.save_state();
+  put_u64(bytes, static_cast<uint64_t>(model_bytes.size()));
+  put_u64(bytes, static_cast<uint64_t>(optimizer_bytes.size()));
+  put_u32(bytes, static_cast<uint32_t>(rng_text.size()));
+  bytes.insert(bytes.end(), model_bytes.begin(), model_bytes.end());
+  bytes.insert(bytes.end(), optimizer_bytes.begin(), optimizer_bytes.end());
+  bytes.insert(bytes.end(), rng_text.begin(), rng_text.end());
+  put_u32(bytes, crc32(bytes.data(), bytes.size()));
+
+  std::ofstream file(path, std::ios::binary | std::ios::trunc);
+  if (!file) return false;
+  file.write(reinterpret_cast<const char *>(bytes.data()),
+             static_cast<std::streamsize>(bytes.size()));
+  return static_cast<bool>(file);
+}
+
+void test_legacy_checkpoint_requires_explicit_horizon() {
+  const auto root = std::filesystem::temp_directory_path() / "zika_legacy_ckpt_test";
+  std::filesystem::remove_all(root);
+  std::filesystem::create_directories(root);
+  const std::string checkpoint = (root / "legacy.ckpt").string();
+  const auto train = real_train_text();
+  const auto validation = real_validation_text();
+
+  TrainingConfig cfg;
+  cfg.steps = 60;
+  cfg.batch_size = 2;
+  cfg.sequence_length = 8;
+  cfg.warmup_steps = 6;
+  cfg.learning_rate = 0.005f;
+  cfg.min_learning_rate_ratio = 0.25f;
+  cfg.weight_decay = 0.0f;
+  cfg.max_grad_norm = 1.0f;
+  cfg.seed = 991;
+  cfg.log_every = 0;
+  cfg.checkpoint_every = 0;
+  cfg.eval_every = 0;
+  cfg.full_eval_every = 0;
+
+  Model initial = tiny_model();
+  CHECK(write_legacy_checkpoint(checkpoint, initial, train, validation, cfg));
+
+  Model without_hint = tiny_model();
+  TrainingResult ignored;
+  const std::string refusal = train_model(
+      without_hint, train, validation, cfg, "", "", checkpoint, ignored);
+  CHECK(refusal.find("--resume-legacy-total-steps") != std::string::npos);
+
+  cfg.legacy_resume_total_steps = 50;
+  Model migrated = tiny_model();
+  TrainingResult migrated_result;
+  const std::string error = train_model(
+      migrated, train, validation, cfg, "", "", checkpoint, migrated_result);
+  CHECK(error.empty());
+  CHECK(migrated_result.initial_step == 0);
+  CHECK(migrated_result.final_step == 60);
+  CHECK(migrated_result.first_learning_rate > 0.0f);
+
+  std::filesystem::remove_all(root);
+}
+
 void test_bad_token_file() {
   const auto path = std::filesystem::temp_directory_path() / "zika_bad_tokens.bin";
   {
@@ -263,6 +367,7 @@ int main() {
   test_real_text_training_and_sampled_evaluation();
   test_interrupted_resume_matches_continuous_training();
   test_checkpoint_extension_is_smooth_and_data_bound();
+  test_legacy_checkpoint_requires_explicit_horizon();
   test_bad_token_file();
   std::printf("ZIKA training: %d verificacoes, %d falhas\n", checks, failures);
   return failures == 0 ? 0 : 1;

@@ -185,6 +185,14 @@ SchedulerState fresh_scheduler(const TrainingConfig &cfg) {
 void extend_scheduler(SchedulerState &s, uint64_t current_step,
                       uint64_t new_end_step, uint32_t resume_warmup_steps) {
   const float current_lr = schedule_learning_rate(current_step, s);
+  if (current_step < s.initial_warmup_steps) {
+    s.segment_start_step = s.initial_warmup_steps;
+    s.segment_start_lr = s.base_lr;
+    s.segment_warmup_end_step = s.initial_warmup_steps;
+    s.segment_end_step = new_end_step;
+    s.current_lr = current_lr;
+    return;
+  }
   const bool previous_schedule_finished = current_step >= s.segment_end_step;
   s.segment_start_step = current_step;
   s.segment_start_lr = current_lr;
