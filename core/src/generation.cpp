@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -41,6 +42,33 @@ bool valid_utf8_text(const std::string &text) {
   size_t pos = 0;
   while (pos < text.size()) {
     const size_t width = utf8_width(static_cast<unsigned char>(text[pos]));
+    if (!valid_utf8_unit(text, pos, width)) return false;
+    pos += width;
+  }
+  return true;
+}
+
+
+bool valid_utf8_prefix(const std::string &text) {
+  size_t pos = 0;
+  while (pos < text.size()) {
+    const unsigned char lead = static_cast<unsigned char>(text[pos]);
+    const size_t width = utf8_width(lead);
+    if (width == 0) return false;
+    const size_t available = text.size() - pos;
+    const size_t present = std::min(width, available);
+    for (size_t i = 1; i < present; ++i) {
+      const unsigned char byte = static_cast<unsigned char>(text[pos + i]);
+      if ((byte & 0xC0) != 0x80) return false;
+      if (i == 1) {
+        if ((lead == 0xE0 && byte < 0xA0) ||
+            (lead == 0xED && byte >= 0xA0) ||
+            (lead == 0xF0 && byte < 0x90) ||
+            (lead == 0xF4 && byte >= 0x90))
+          return false;
+      }
+    }
+    if (available < width) return true; // valid but incomplete final code point
     if (!valid_utf8_unit(text, pos, width)) return false;
     pos += width;
   }
@@ -207,6 +235,7 @@ std::string generate_tokens(const Model &model,
     return "vocabulario do modelo invalido";
 
   std::vector<uint32_t> running = context;
+  std::string generated_utf8;
   for (uint32_t step = 0; step < cfg.max_new_tokens; ++step) {
     const size_t begin = running.size() > model.cfg.ctx_len
                              ? running.size() - model.cfg.ctx_len
@@ -221,6 +250,24 @@ std::string generate_tokens(const Model &model,
     const size_t offset = (window.size() - 1) * model.cfg.vocab_size;
     std::vector<float> last(logits.begin() + offset,
                             logits.begin() + offset + model.cfg.vocab_size);
+
+    // Byte-level BPE pode deixar um caractere UTF-8 incompleto entre tokens.
+    // Mascara candidatos invalidos e exige sequencia completa no ultimo passo.
+    if (model.tok.kind == TokenizerKind::BPE) {
+      const bool final_step = step + 1 == cfg.max_new_tokens;
+      const float masked = -std::numeric_limits<float>::max();
+      for (uint32_t id = 0; id < model.cfg.vocab_size; ++id) {
+        if (id < 3) {
+          if (!valid_utf8_text(generated_utf8)) last[id] = masked;
+          continue;
+        }
+        const std::string candidate = generated_utf8 + model.tok.tokens[id];
+        if (!valid_utf8_prefix(candidate) ||
+            (final_step && !valid_utf8_text(candidate)))
+          last[id] = masked;
+      }
+    }
+
     uint32_t next = 0;
     try {
       next = sample_next_token(last, cfg, rng);
@@ -232,6 +279,8 @@ std::string generate_tokens(const Model &model,
     if (next < 3) break;
     generated.push_back(next);
     running.push_back(next);
+    if (model.tok.kind == TokenizerKind::BPE)
+      generated_utf8 += model.tok.tokens[next];
   }
   return "";
 }
