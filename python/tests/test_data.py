@@ -147,7 +147,7 @@ class DatasetTests(unittest.TestCase):
                            {"role": "ia", "text": "Uma expressao e ευχαριστώ."}]},
             ]
             source.write_text(
-                "".join(json.dumps(row, ensure_ascii=False) + "\\n" for row in rows),
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
                 encoding="utf-8",
             )
             out = root / "processed"

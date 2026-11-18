@@ -322,9 +322,7 @@ static void test_spec_json() {
 
   const std::string bpe = R"({"tokenizer": "bpe", "n_layers": 1, "d_model": 8,
     "n_heads": 1, "d_ff": 8, "ctx_len": 8})";
-  CHECK(parse_spec_json(bpe, t).empty());
-  CHECK(t.tokenizer == "bpe");
-  CHECK(t.cfg.d_model == 8 && t.cfg.n_heads == 1);
+  CHECK_ERR(parse_spec_json(bpe, t), "nao suportado");
 
   CHECK(!load_spec_json("/caminho/que/nao/existe.json", t).empty());
 }
