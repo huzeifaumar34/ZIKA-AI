@@ -8,6 +8,8 @@ from zika.tokenizer import (
     CHAR_VOCAB,
     SPECIAL_TOKENS,
     CharTokenizer,
+    BpeTokenizer,
+    BPE_BASE_VOCAB_SIZE,
     TokenizerError,
 )
 
@@ -65,6 +67,68 @@ class CharTokenizerTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(path.read_text(encoding="utf-8"))["vocab_size"], 124
             )
+
+
+class BpeTokenizerTests(unittest.TestCase):
+    def test_deterministic_training_and_utf8_byte_fallback(self):
+        corpus = [
+            "ola mundo ola mundo",
+            "ola mundo ola mundo",
+            "programar com cuidado programar com cuidado",
+        ]
+        first = BpeTokenizer.train(corpus, vocab_size=280, min_frequency=2)
+        second = BpeTokenizer.train(corpus, vocab_size=280, min_frequency=2)
+        self.assertEqual(first.tokens, second.tokens)
+        self.assertEqual(first.merges, second.merges)
+        self.assertGreater(first.vocab_size, BPE_BASE_VOCAB_SIZE)
+
+        text = "Olá, mundo! 🙂 中文 — texto desconhecido."
+        ids = first.encode(text, parse_special_tokens=False)
+        self.assertLess(len(ids), len(text.encode("utf-8")))
+        self.assertEqual(first.decode(ids), text)
+
+    def test_special_tokens_are_reserved_but_user_text_can_be_literal(self):
+        tokenizer = BpeTokenizer.train(
+            ["<|user|>ola<|ia|>bom dia<|fim|>"] * 3,
+            vocab_size=270,
+        )
+        serialized_ids = tokenizer.encode("<|user|>ola<|ia|>")
+        self.assertEqual(serialized_ids[0], 0)
+        self.assertIn(1, serialized_ids)
+        literal = "<|user|>"
+        literal_ids = tokenizer.encode(literal, parse_special_tokens=False)
+        self.assertTrue(all(token_id >= 3 for token_id in literal_ids))
+        self.assertEqual(tokenizer.decode(literal_ids), literal)
+        self.assertEqual(
+            tokenizer.decode(serialized_ids, skip_special_tokens=True),
+            "ola",
+        )
+
+    def test_json_and_binary_roundtrip_with_checksum(self):
+        tokenizer = BpeTokenizer.train(["abc abc abc", "abc abc abc"], vocab_size=280)
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = Path(tmp) / "tokenizer.json"
+            binary_path = Path(tmp) / "tokenizer.zkt"
+            tokenizer.save(json_path)
+            tokenizer.save_binary(binary_path)
+            loaded = BpeTokenizer.load(json_path)
+            self.assertEqual(loaded.tokens, tokenizer.tokens)
+            self.assertEqual(loaded.merges, tokenizer.merges)
+            self.assertEqual(loaded.encode("🙂abc"), tokenizer.encode("🙂abc"))
+            raw = binary_path.read_bytes()
+            self.assertEqual(raw[:4], b"ZTKZ")
+            self.assertEqual(len(raw), len(tokenizer.to_binary()))
+            self.assertEqual(int.from_bytes(raw[-4:], "little"),
+                             __import__("zlib").crc32(raw[:-4]))
+
+    def test_invalid_vocab_and_ids_are_rejected(self):
+        with self.assertRaises(TokenizerError):
+            BpeTokenizer.train(["abc"], vocab_size=BPE_BASE_VOCAB_SIZE - 1)
+        tokenizer = BpeTokenizer.train(["abc abc"] * 2, vocab_size=270)
+        with self.assertRaises(TokenizerError):
+            tokenizer.decode([tokenizer.vocab_size])
+        with self.assertRaises(TokenizerError):
+            tokenizer.decode([True])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+{
+  "name": "zika-nano-bpe",
+  "tokenizer": "bpe",
+  "n_layers": 3,
+  "d_model": 128,
+  "n_heads": 4,
+  "d_ff": 512,
+  "ctx_len": 256
+}

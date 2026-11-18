@@ -3,6 +3,17 @@ name: ZIKA-AI Train Nano
 on:
   workflow_dispatch:
     inputs:
+      tokenizer:
+        description: "Tokenizer usado no treino"
+        required: true
+        type: choice
+        options: [char, bpe]
+        default: char
+      vocab_size:
+        description: "Tamanho alvo do vocabulario BPE (inclui 259 tokens base)"
+        required: true
+        type: number
+        default: 512
       steps:
         description: "Numero total de passos de treino"
         required: true
@@ -94,7 +105,9 @@ jobs:
             --input data/dialogos.jsonl data/dialogos_extra.jsonl \
             --output-dir "$RUNNER_TEMP/zika-data" \
             --validation-ratio "${{ inputs.validation_ratio }}" \
-            --test-ratio "${{ inputs.test_ratio }}"
+            --test-ratio "${{ inputs.test_ratio }}" \
+            --tokenizer "${{ inputs.tokenizer }}" \
+            --vocab-size "${{ inputs.vocab_size }}"
 
       - name: Restore previous checkpoint
         if: ${{ inputs.resume_run_id != '' }}
@@ -107,6 +120,8 @@ jobs:
 
       - name: Train ZIKA-Nano
         env:
+          TOKENIZER: ${{ inputs.tokenizer }}
+          VOCAB_SIZE: ${{ inputs.vocab_size }}
           STEPS: ${{ inputs.steps }}
           BATCH_SIZE: ${{ inputs.batch_size }}
           SEQUENCE_LENGTH: ${{ inputs.sequence_length }}
@@ -122,8 +137,10 @@ jobs:
           mkdir -p output
           WARMUP=$((STEPS / 10))
           if [ "$WARMUP" -ge "$STEPS" ]; then WARMUP=0; fi
+          CONFIG=configs/nano.json
+          if [ "$TOKENIZER" = "bpe" ]; then CONFIG=configs/nano-bpe.json; fi
           ARGS=(
-            --config configs/nano.json
+            --config "$CONFIG"
             --data "$RUNNER_TEMP/zika-data/train.bin"
             --val-data "$RUNNER_TEMP/zika-data/val.bin"
             --out output/zika-nano.zika
@@ -141,6 +158,12 @@ jobs:
             --checkpoint-every 100
             --resume-legacy-total-steps "$RESUME_LEGACY_TOTAL_STEPS"
           )
+          if [ "$TOKENIZER" = "bpe" ]; then
+            test -s "$RUNNER_TEMP/zika-data/tokenizer.zkt"
+            ARGS+=(--tokenizer-file "$RUNNER_TEMP/zika-data/tokenizer.zkt")
+            cp "$RUNNER_TEMP/zika-data/tokenizer.zkt" output/tokenizer.zkt
+            cp "$RUNNER_TEMP/zika-data/tokenizer.json" output/tokenizer.json
+          fi
           if [ -n "$RESUME_RUN_ID" ]; then
             CHECKPOINT="$RUNNER_TEMP/resume/zika-nano.ckpt"
             test -s "$CHECKPOINT"

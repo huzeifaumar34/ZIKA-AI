@@ -338,7 +338,9 @@ std::string load_checkpoint(const std::string &path, Model &model,
       restored.cfg.n_heads != model.cfg.n_heads ||
       restored.cfg.d_ff != model.cfg.d_ff ||
       restored.cfg.ctx_len != model.cfg.ctx_len ||
-      restored.tok.tokens != model.tok.tokens)
+      restored.tok.kind != model.tok.kind ||
+      restored.tok.tokens != model.tok.tokens ||
+      restored.tok.merges != model.tok.merges)
     return "a configuracao do checkpoint difere da configuracao solicitada";
   err = optimizer.load_state(optimizer_bytes.data(), optimizer_bytes.size(), restored);
   if (!err.empty()) return err;

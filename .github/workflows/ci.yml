@@ -109,6 +109,58 @@ jobs:
             --data "$RUNNER_TEMP/zika-data/test.bin" \
             --seq-len 8
 
+
+      - name: Prepare and audit BPE corpus
+        env:
+          PYTHONPATH: python
+        run: |
+          python -m zika.data \
+            --input data/dialogos.jsonl data/dialogos_extra.jsonl \
+            --output-dir "$RUNNER_TEMP/zika-bpe-data" \
+            --tokenizer bpe --vocab-size 384
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "zika-bpe-data"
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          assert manifest["tokenizer"] == "bpe-byte-v0.1"
+          assert manifest["vocab_size"] >= 259
+          assert (root / "tokenizer.zkt").read_bytes()[:4] == b"ZTKZ"
+          for name in ("train.bin", "val.bin", "test.bin"):
+              data = (root / name).read_bytes()
+              assert data and len(data) % 4 == 0
+          print("BPE auditado:", manifest["vocab_size"], "tokens de vocabulario")
+          PY
+
+      - name: BPE training, eval and chat smoke test
+        run: |
+          ./build/zika train \
+            --config configs/nano-bpe.json \
+            --tokenizer-file "$RUNNER_TEMP/zika-bpe-data/tokenizer.zkt" \
+            --data "$RUNNER_TEMP/zika-bpe-data/train.bin" \
+            --val-data "$RUNNER_TEMP/zika-bpe-data/val.bin" \
+            --out "$RUNNER_TEMP/zika-nano-bpe-smoke.zika" \
+            --checkpoint "$RUNNER_TEMP/zika-nano-bpe-smoke.ckpt" \
+            --steps 3 --batch-size 1 --seq-len 8 --warmup-steps 1 \
+            --log-every 1 --eval-every 1 --eval-tokens 64 \
+            --full-eval-every 0 --checkpoint-every 1
+          ./build/zika info "$RUNNER_TEMP/zika-nano-bpe-smoke.zika"
+          ./build/zika eval \
+            --model "$RUNNER_TEMP/zika-nano-bpe-smoke.zika" \
+            --data "$RUNNER_TEMP/zika-bpe-data/test.bin" --seq-len 8
+          printf 'Ola 🙂\n/sair\n' | \
+            ./build/zika chat --model "$RUNNER_TEMP/zika-nano-bpe-smoke.zika" \
+              --max-new-tokens 4 --top-k 1
+
+      - name: Upload BPE tokenizer and dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: zika-bpe-pipeline-smoke
+          path: ${{ runner.temp }}/zika-bpe-data/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload processed dataset
         uses: actions/upload-artifact@v4
         with:

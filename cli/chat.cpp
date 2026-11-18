@@ -106,9 +106,12 @@ int cmd_chat(int argc, char **argv) {
     std::fprintf(stderr, "erro ao carregar modelo: %s\n", load_error.c_str());
     return 1;
   }
-  if (model.tok.kind != zika::TokenizerKind::Char ||
-      model.tok.tokens.size() != model.cfg.vocab_size) {
-    std::fprintf(stderr, "erro: o chat atual requer tokenizer de caracteres char-v0.1\n");
+  if ((model.tok.kind != zika::TokenizerKind::Char &&
+       model.tok.kind != zika::TokenizerKind::BPE) ||
+      model.tok.tokens.size() != model.cfg.vocab_size ||
+      (model.tok.kind == zika::TokenizerKind::Char && model.cfg.vocab_size < 4) ||
+      (model.tok.kind == zika::TokenizerKind::BPE && model.cfg.vocab_size < 259)) {
+    std::fprintf(stderr, "erro: tokenizer do modelo invalido\\n");
     return 1;
   }
   if (config.max_new_tokens == 0 || config.temperature <= 0.0f ||

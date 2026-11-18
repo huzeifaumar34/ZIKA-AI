@@ -12,7 +12,7 @@ from zika.data import (
     serialize_conversation,
     validate_conversation,
 )
-from zika.tokenizer import CharTokenizer
+from zika.tokenizer import BpeTokenizer, CharTokenizer
 
 
 SAMPLE = {
@@ -123,6 +123,51 @@ class DatasetTests(unittest.TestCase):
             path.write_text(json.dumps(SAMPLE) + "\n", encoding="utf-8")
             with self.assertRaises(DatasetError):
                 prepare_dataset(path, root / "out")
+
+    def test_bpe_pipeline_handles_unseen_unicode_and_writes_binary_tokenizer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "unicode.jsonl"
+            rows = [
+                {"turns": [{"role": "user", "text": "Como funciona o sol?"},
+                           {"role": "ia", "text": "O sol e uma estrela que emite luz."}]},
+                {"turns": [{"role": "user", "text": "O que e um oceano?"},
+                           {"role": "ia", "text": "E uma grande massa de agua salgada."}]},
+                {"turns": [{"role": "user", "text": "O que significa emoji?"},
+                           {"role": "ia", "text": "E um simbolo visual usado em mensagens 🙂."}]},
+                {"turns": [{"role": "user", "text": "Como se diz ola em japones?"},
+                           {"role": "ia", "text": "Uma forma comum e konnichiwa: こんにちは."}]},
+                {"turns": [{"role": "user", "text": "O que e uma rede?"},
+                           {"role": "ia", "text": "Liga dispositivos para trocar informacao."}]},
+                {"turns": [{"role": "user", "text": "O que e uma biblioteca?"},
+                           {"role": "ia", "text": "E uma colecao organizada de recursos."}]},
+                {"turns": [{"role": "user", "text": "O que e um planeta?"},
+                           {"role": "ia", "text": "E um corpo celeste que orbita uma estrela."}]},
+                {"turns": [{"role": "user", "text": "Como se escreve obrigado em grego?"},
+                           {"role": "ia", "text": "Uma expressao e ευχαριστώ."}]},
+            ]
+            source.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+            out = root / "processed"
+            manifest = prepare_dataset(
+                source, out, seed=19, tokenizer_kind="bpe", bpe_vocab_size=300,
+                validation_ratio=0.125, test_ratio=0.125,
+            )
+            self.assertEqual(manifest["tokenizer"], "bpe-byte-v0.1")
+            self.assertEqual(manifest["tokenizer_kind"], "bpe")
+            self.assertTrue((out / "tokenizer.zkt").exists())
+            self.assertEqual((out / "tokenizer.zkt").read_bytes()[:4], b"ZTKZ")
+            tokenizer = BpeTokenizer.load(out / "tokenizer.json")
+            self.assertEqual(tokenizer.vocab_size, manifest["vocab_size"])
+            novel = "🙂 こんにちは ευχαριστώ"
+            self.assertEqual(
+                tokenizer.decode(tokenizer.encode(novel, parse_special_tokens=False)),
+                novel,
+            )
+            for file_name in ("train.bin", "val.bin", "test.bin"):
+                self.assertEqual((out / file_name).stat().st_size % 4, 0)
 
 
 if __name__ == "__main__":

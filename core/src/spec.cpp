@@ -121,8 +121,8 @@ std::string parse_spec_json(const std::string &text, ModelSpec &spec) {
     if (!seen.count(req))
       return std::string("falta a chave obrigatoria: ") + req;
   }
-  if (out.tokenizer != "char")
-    return "tokenizer '" + out.tokenizer + "' ainda nao suportado (so \"char\")";
+  if (out.tokenizer != "char" && out.tokenizer != "bpe")
+    return "tokenizer '" + out.tokenizer + "' nao suportado (opcoes: \"char\", \"bpe\")";
 
   spec = std::move(out);
   return "";
