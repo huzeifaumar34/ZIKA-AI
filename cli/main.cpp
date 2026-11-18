@@ -12,6 +12,8 @@
 #include "zika/training.hpp"
 #include "zika/transformer.hpp"
 
+int cmd_chat(int argc, char **argv);
+
 #ifndef ZIKA_VERSION
 #define ZIKA_VERSION "dev"
 #endif
@@ -29,7 +31,8 @@ void usage() {
       "  zika info <modelo.zika> [--tensors]\n"
       "  zika train --config <ficheiro.json> --data <train.bin>\n"
       "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n"
-      "  zika eval --model <modelo.zika> --data <test.bin> [opcoes]\n\n"
+      "  zika eval --model <modelo.zika> --data <test.bin> [opcoes]\n"
+      "  zika chat --model <modelo.zika> [opcoes]\n\n"
       "Opcoes de treino:\n"
       "  --steps N                   passo total pretendido (default 500)\n"
       "  --batch-size N              sequencias por passo (default 1)\n"
@@ -52,7 +55,13 @@ void usage() {
       "  --model PATH                modelo .zika treinado\n"
       "  --data PATH                 tokens uint32 little-endian\n"
       "  --seq-len N                 comprimento maximo do contexto (default 128)\n"
-      "  --max-tokens N              0 avalia todos; N limita a amostra (default 0)\n",
+      "  --max-tokens N              0 avalia todos; N limita a amostra (default 0)\n\n"
+      "Opcoes de chat:\n"
+      "  --max-new-tokens N          maximo de tokens por resposta (default 160)\n"
+      "  --temperature F             temperatura de amostragem (default 0.8)\n"
+      "  --top-k N                   limitar candidatos; 0 desativa (default 40)\n"
+      "  --top-p F                   nucleus sampling (default 0.9)\n"
+      "  --seed N                    semente de amostragem (default 1337)\n",
       ZIKA_VERSION);
 }
 
@@ -341,6 +350,7 @@ int main(int argc, char **argv) {
   if (cmd == "info") return cmd_info(argc, argv);
   if (cmd == "train") return cmd_train(argc, argv);
   if (cmd == "eval") return cmd_eval(argc, argv);
+  if (cmd == "chat") return cmd_chat(argc, argv);
   if (cmd == "help" || cmd == "--help" || cmd == "-h") {
     usage();
     return 0;

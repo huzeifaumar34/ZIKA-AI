@@ -20,6 +20,7 @@ add_library(zika_core STATIC
   core/src/spec.cpp
   core/src/ops.cpp
   core/src/transformer.cpp
+  core/src/generation.cpp
   core/src/optimizer.cpp
   core/src/training.cpp
 )
@@ -37,7 +38,7 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 # ---- Executável zika ----
-add_executable(zika cli/main.cpp)
+add_executable(zika cli/main.cpp cli/chat.cpp)
 target_link_libraries(zika PRIVATE zika_core)
 target_compile_definitions(zika PRIVATE ZIKA_VERSION="\${PROJECT_VERSION}")
 
@@ -55,4 +56,8 @@ if(ZIKA_BUILD_TESTS)
   add_executable(zika_training_tests tests/test_training.cpp)
   target_link_libraries(zika_training_tests PRIVATE zika_core)
   add_test(NAME training_real_dialogues_checkpoint_resume COMMAND zika_training_tests)
+
+  add_executable(zika_generation_tests tests/test_generation.cpp)
+  target_link_libraries(zika_generation_tests PRIVATE zika_core)
+  add_test(NAME generation_sampling COMMAND zika_generation_tests)
 endif()

@@ -149,11 +149,15 @@ jobs:
           ./build/zika train "${ARGS[@]}" 2>&1 | tee output/training.log
           ./build/zika info output/zika-nano.zika | tee output/model-info.txt
           if [ "$MAX_STEPS_THIS_RUN" -eq 0 ]; then
-            ./build/zika eval \\
-              --model output/zika-nano.zika \\
-              --data "$RUNNER_TEMP/zika-data/test.bin" \\
-              --seq-len "$SEQUENCE_LENGTH" \\
+            ./build/zika eval \
+              --model output/zika-nano.zika \
+              --data "$RUNNER_TEMP/zika-data/test.bin" \
+              --seq-len "$SEQUENCE_LENGTH" \
               | tee output/held-out-test-evaluation.txt
+            printf 'O que e uma variavel?\nComo posso estudar melhor?\n/sair\n' | \
+              ./build/zika chat --model output/zika-nano.zika \
+                --max-new-tokens 96 --temperature 0.8 --top-k 40 --top-p 0.9 --seed 2026 \
+              | tee output/qualitative-samples.txt
           else
             echo "Execucao parcial: avaliacao held-out adiada ate ao ultimo segmento."
           fi
