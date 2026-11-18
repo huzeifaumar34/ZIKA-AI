@@ -68,7 +68,7 @@ Formato de modelo v1, little-endian, com magic, configuracao, tokenizer, tensore
 | 4A | Motor de treino inicial | Nano treinado e loss monitorizada |
 | 4B | Robustez de treino | Scheduler retomavel, avaliacao eficiente, checkpoints verificaveis, testes com texto real |
 | 4C | Dados e avaliacao | Tres conjuntos disjuntos, auditoria e avaliacao held-out |
-| 5 | Chat no terminal | Conversa com pesos treinados e avaliacao qualitativa |
+| 5 | Chat no terminal | Inferencia autoregressiva, amostragem, historico e avaliacao qualitativa |
 | 6 | Chat web offline | Paridade C++/JavaScript e uso no telemovel |
 | 7 | ZIKA-Mini e quantizacao | Benchmark de qualidade, memoria e velocidade |
 
@@ -111,3 +111,11 @@ Formato de modelo v1, little-endian, com magic, configuracao, tokenizer, tensore
 - Treino em CPU e viavel para o Nano, mas modelos maiores podem exigir muito tempo.
 - Dados externos exigem verificacao de licenca, qualidade, duplicados e contaminacao do teste.
 - Testes automaticos precisam ser complementados por uma bateria qualitativa e revisao humana.
+
+## 10. Inferencia e chat no terminal (implementacao inicial)
+
+- `core/src/generation.cpp`: codificacao e descodificacao UTF-8 para char-v0.1, amostragem por temperatura/Top-K/Top-P e geracao autoregressiva atraves de `forward_logits`.
+- `cli/chat.cpp`: `zika chat --model ...`, historico limitado a `ctx_len`, encerramento por `/sair` e parametros de amostragem.
+- `tests/test_generation.cpp`: ida-e-volta de texto, rejeicao de UTF-8/caracteres desconhecidos, Top-K, parametros e geracao.
+- Limite conhecido: cada token recalcula toda a janela; KV cache fica como otimizacao posterior.
+- Critério de qualidade pendente: testar com o Nano efetivamente treinado, recolher exemplos de respostas e avaliar coerencia, repeticao e utilidade. O CI verifica funcionamento, nao qualidade semantica.

@@ -90,6 +90,19 @@ Para dividir uma campanha longa em varias execucoes, usa `--max-steps-this-run 5
 
 A retoma exige o mesmo corpus, batch size, seq-len, learning rate, weight decay e grad clip. Para checkpoints antigos ZCKP v1, que nao guardavam o horizonte do scheduler, e obrigatorio indicar o total original de passos, por exemplo `--resume-legacy-total-steps 500`. Sem esse valor, a retoma e rejeitada em vez de adivinhar um scheduler.
 
+## Chat no terminal
+
+A primeira implementação de inferência permite conversar com um modelo `.zika`:
+
+```bash
+./build/zika chat --model models/zika-nano.zika \
+  --max-new-tokens 96 --temperature 0.8 --top-k 40 --top-p 0.9
+```
+
+Escreve uma mensagem por linha; usa `/sair` para terminar. O chat mantém um histórico limitado à janela de contexto e aceita os parâmetros de amostragem temperatura, Top-K, Top-P e seed. O tokenizer atual é char-v0.1, pelo que caracteres fora do vocabulário são rejeitados.
+
+**Limitação de desempenho:** a versão inicial recalcula o forward da janela de contexto a cada token gerado. KV cache ainda não está implementado. O CI testa tokenizer, amostragem e geração; a qualidade das respostas tem de ser verificada com pesos treinados e avaliação humana. Uma passagem no CI não significa que o modelo já seja um bom assistente.
+
 ## Avaliacao e testes
 
 ```bash
@@ -108,7 +121,7 @@ Passar os testes verifica a integridade do codigo e do pipeline; nao substitui u
 1. Reunir um corpus significativamente maior, diversificado, deduplicado e com proveniencia/licenca registada.
 2. Treinar e avaliar o Nano com exemplos de teste nunca vistos.
 3. Implementar tokenizer BPE e medir a melhoria de contexto.
-4. Validar inferencia/chat no terminal e otimizar com KV cache.
+4. Otimizar a inferencia com KV cache e medir latencia/memoria no telemovel.
 5. Implementar chat web offline e so depois testar Mini e quantizacao.
 
 ## Licenca
