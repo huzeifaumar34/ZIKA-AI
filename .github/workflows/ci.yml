@@ -34,6 +34,7 @@ jobs:
           ./build/zika help
           ./build/zika init --config configs/nano.json --out /tmp/zika-nano-empty.zika
           ./build/zika info /tmp/zika-nano-empty.zika
+          printf 'Ola!\n/sair\n' | ./build/zika chat --model /tmp/zika-nano-empty.zika --max-new-tokens 4 --top-k 1
 
       - uses: actions/setup-python@v5
         with:
