@@ -80,11 +80,13 @@ As avaliacoes periodicas usam janelas deterministicamente distribuidas ao longo 
 
 Os checkpoints ZCKP v2 guardam pesos, estado do AdamW, RNG, estado do scheduler e os parametros relevantes do treino. Prolongar uma campanha cria uma transicao suave a partir da taxa de aprendizagem atual; nao recalcula o scheduler como se o modelo estivesse no inicio.
 
-Exemplo:
+Exemplo de retoma com o mesmo horizonte:
 
 ```bash
 ./build/zika train ... --steps 1500 --resume models/zika-nano.zika.ckpt
 ```
+
+Para dividir uma campanha longa em varias execucoes, usa `--max-steps-this-run 500` e retoma o checkpoint mantendo o mesmo `--steps`. O conjunto de teste so e avaliado depois de a campanha atingir o passo final.
 
 A retoma exige o mesmo corpus, batch size, seq-len, learning rate, weight decay e grad clip. Para checkpoints antigos ZCKP v1, que nao guardavam o horizonte do scheduler, e obrigatorio indicar o total original de passos, por exemplo `--resume-legacy-total-steps 500`. Sem esse valor, a retoma e rejeitada em vez de adivinhar um scheduler.
 

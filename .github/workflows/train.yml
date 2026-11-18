@@ -48,6 +48,11 @@ on:
         required: true
         type: number
         default: 500
+      max_steps_this_run:
+        description: "Passos executados nesta execucao (0 executa ate ao total)"
+        required: true
+        type: number
+        default: 0
       resume_run_id:
         description: "ID de uma execucao anterior para retomar (opcional)"
         required: false
@@ -106,6 +111,7 @@ jobs:
           BATCH_SIZE: ${{ inputs.batch_size }}
           SEQUENCE_LENGTH: ${{ inputs.sequence_length }}
           SEED: ${{ inputs.seed }}
+          MAX_STEPS_THIS_RUN: ${{ inputs.max_steps_this_run }}
           EVAL_EVERY: ${{ inputs.eval_every }}
           EVAL_TOKENS: ${{ inputs.eval_tokens }}
           FULL_EVAL_EVERY: ${{ inputs.full_eval_every }}
@@ -123,6 +129,7 @@ jobs:
             --out output/zika-nano.zika
             --checkpoint output/zika-nano.ckpt
             --steps "$STEPS"
+            --max-steps-this-run "$MAX_STEPS_THIS_RUN"
             --batch-size "$BATCH_SIZE"
             --seq-len "$SEQUENCE_LENGTH"
             --warmup-steps "$WARMUP"
@@ -141,11 +148,15 @@ jobs:
           fi
           ./build/zika train "${ARGS[@]}" 2>&1 | tee output/training.log
           ./build/zika info output/zika-nano.zika | tee output/model-info.txt
-          ./build/zika eval \
-            --model output/zika-nano.zika \
-            --data "$RUNNER_TEMP/zika-data/test.bin" \
-            --seq-len "$SEQUENCE_LENGTH" \
-            | tee output/held-out-test-evaluation.txt
+          if [ "$MAX_STEPS_THIS_RUN" -eq 0 ]; then
+            ./build/zika eval \\
+              --model output/zika-nano.zika \\
+              --data "$RUNNER_TEMP/zika-data/test.bin" \\
+              --seq-len "$SEQUENCE_LENGTH" \\
+              | tee output/held-out-test-evaluation.txt
+          else
+            echo "Execucao parcial: avaliacao held-out adiada ate ao ultimo segmento."
+          fi
           cp "$RUNNER_TEMP/zika-data/manifest.json" output/dataset-manifest.json
 
       - name: Add training summary
