@@ -1,10 +1,8 @@
-"""Validacao e preparacao de corpus JSONL para o ZIKA-AI.
+"""Validacao, deduplicacao e preparacao de corpus JSONL para o ZIKA-AI.
 
-Formato de cada linha:
-{"turns":[{"role":"user","text":"..."},{"role":"ia","text":"..."}]}
-
-Os binarios guardam IDs uint32 little-endian, sem padding. A divisao e feita
-por conversa, nunca por token, para evitar fuga entre treino e validacao.
+Cada linha representa uma conversa completa. As conversas sao separadas entre
+treino, validacao e teste antes da serializacao, evitando fuga entre conjuntos.
+Os artefactos binarios usam IDs uint32 little-endian.
 """
 from __future__ import annotations
 
@@ -14,6 +12,7 @@ import json
 import random
 import struct
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -32,10 +31,14 @@ def validate_conversation(
 ) -> dict[str, list[dict[str, str]]]:
     tokenizer = tokenizer or CharTokenizer()
     if not isinstance(item, dict) or set(item) != {"turns"}:
-        raise DatasetError(f"{source}:{line_number}: cada registo deve conter apenas a chave 'turns'")
+        raise DatasetError(
+            f"{source}:{line_number}: cada registo deve conter apenas a chave 'turns'"
+        )
     turns = item["turns"]
     if not isinstance(turns, list) or len(turns) < 2:
-        raise DatasetError(f"{source}:{line_number}: 'turns' tem de conter pelo menos duas mensagens")
+        raise DatasetError(
+            f"{source}:{line_number}: 'turns' tem de conter pelo menos duas mensagens"
+        )
 
     clean_turns: list[dict[str, str]] = []
     expected_role = "user"
@@ -46,13 +49,17 @@ def validate_conversation(
             )
         role, text = turn["role"], turn["text"]
         if not isinstance(role, str) or role not in ROLE_TOKEN:
-            raise DatasetError(f"{source}:{line_number}: role invalido no turno {index + 1}: {role!r}")
+            raise DatasetError(
+                f"{source}:{line_number}: role invalido no turno {index + 1}: {role!r}"
+            )
         if role != expected_role:
             raise DatasetError(
                 f"{source}:{line_number}: esperado role {expected_role!r} no turno {index + 1}"
             )
         if not isinstance(text, str) or not text.strip():
-            raise DatasetError(f"{source}:{line_number}: texto vazio ou invalido no turno {index + 1}")
+            raise DatasetError(
+                f"{source}:{line_number}: texto vazio ou invalido no turno {index + 1}"
+            )
         if any(marker in text for marker in SPECIAL_TOKENS):
             raise DatasetError(
                 f"{source}:{line_number}: texto nao pode conter marcadores especiais reservados"
@@ -65,35 +72,10 @@ def validate_conversation(
         expected_role = "ia" if expected_role == "user" else "user"
 
     if clean_turns[-1]["role"] != "ia":
-        raise DatasetError(f"{source}:{line_number}: a conversa tem de terminar com uma resposta da ia")
-    return {"turns": clean_turns}
-
-
-def load_jsonl(
-    path: str | Path, tokenizer: CharTokenizer | None = None
-) -> list[dict[str, list[dict[str, str]]]]:
-    source = Path(path)
-    try:
-        text = source.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise DatasetError(f"nao foi possivel ler {source}: {exc}") from exc
-
-    conversations: list[dict[str, list[dict[str, str]]]] = []
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise DatasetError(
-                f"{source}:{line_number}: JSON invalido na coluna {exc.colno}: {exc.msg}"
-            ) from exc
-        conversations.append(
-            validate_conversation(
-                item, source=str(source), line_number=line_number, tokenizer=tokenizer
-            )
+        raise DatasetError(
+            f"{source}:{line_number}: a conversa tem de terminar com uma resposta da ia"
         )
-    return conversations
+    return {"turns": clean_turns}
 
 
 def serialize_conversation(conversation: dict[str, list[dict[str, str]]]) -> str:
@@ -102,6 +84,64 @@ def serialize_conversation(conversation: dict[str, list[dict[str, str]]]) -> str
         pieces.extend((ROLE_TOKEN[turn["role"]], turn["text"]))
     pieces.append("<|fim|>")
     return "".join(pieces)
+
+
+def _fingerprint(conversation: dict[str, list[dict[str, str]]]) -> str:
+    serialized = serialize_conversation(conversation)
+    normalized = " ".join(
+        unicodedata.normalize("NFKC", serialized).casefold().split()
+    )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _source_paths(path: str | Path | Sequence[str | Path]) -> list[Path]:
+    if isinstance(path, (str, Path)):
+        paths = [Path(path)]
+    else:
+        paths = [Path(item) for item in path]
+    if not paths:
+        raise DatasetError("indique pelo menos um ficheiro de corpus")
+    return paths
+
+
+def _load_sources(
+    paths: Sequence[Path], tokenizer: CharTokenizer
+) -> tuple[list[dict[str, list[dict[str, str]]]], int]:
+    conversations: list[dict[str, list[dict[str, str]]]] = []
+    seen: set[str] = set()
+    duplicates = 0
+    for source in paths:
+        try:
+            text = source.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise DatasetError(f"nao foi possivel ler {source}: {exc}") from exc
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise DatasetError(
+                    f"{source}:{line_number}: JSON invalido na coluna {exc.colno}: {exc.msg}"
+                ) from exc
+            conversation = validate_conversation(
+                item, source=str(source), line_number=line_number, tokenizer=tokenizer
+            )
+            fingerprint = _fingerprint(conversation)
+            if fingerprint in seen:
+                duplicates += 1
+                continue
+            seen.add(fingerprint)
+            conversations.append(conversation)
+    return conversations, duplicates
+
+
+def load_jsonl(
+    path: str | Path | Sequence[str | Path],
+    tokenizer: CharTokenizer | None = None,
+) -> list[dict[str, list[dict[str, str]]]]:
+    conversations, _ = _load_sources(_source_paths(path), tokenizer or CharTokenizer())
+    return conversations
 
 
 def encode_conversation(
@@ -129,51 +169,80 @@ def _write_u32le(path: Path, values: Iterable[int]) -> tuple[int, str]:
         payload.extend(struct.pack("<I", value))
         count += 1
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(path)
     return count, hashlib.sha256(payload).hexdigest()
 
 
 def prepare_dataset(
-    input_path: str | Path,
+    input_path: str | Path | Sequence[str | Path],
     output_dir: str | Path,
     *,
     validation_ratio: float = 0.1,
+    test_ratio: float = 0.1,
     seed: int = 42,
 ) -> dict[str, Any]:
     if not 0.0 < validation_ratio < 1.0:
         raise DatasetError("validation_ratio tem de estar entre 0 e 1")
+    if not 0.0 < test_ratio < 1.0:
+        raise DatasetError("test_ratio tem de estar entre 0 e 1")
+    if validation_ratio + test_ratio >= 1.0:
+        raise DatasetError("validation_ratio + test_ratio tem de ser inferior a 1")
+
     tokenizer = CharTokenizer()
-    conversations = load_jsonl(input_path, tokenizer)
-    if len(conversations) < 2:
-        raise DatasetError("sao necessarias pelo menos duas conversas para dividir treino e validacao")
+    sources = _source_paths(input_path)
+    conversations, duplicate_count = _load_sources(sources, tokenizer)
+    if len(conversations) < 3:
+        raise DatasetError(
+            "sao necessarias pelo menos tres conversas unicas para treino, validacao e teste"
+        )
 
     indices = list(range(len(conversations)))
     random.Random(seed).shuffle(indices)
     validation_count = max(1, int(round(len(indices) * validation_ratio)))
-    validation_count = min(validation_count, len(indices) - 1)
+    test_count = max(1, int(round(len(indices) * test_ratio)))
+    if validation_count + test_count >= len(indices):
+        raise DatasetError("o corpus e demasiado pequeno para os tres conjuntos")
     validation_indices = set(indices[:validation_count])
+    test_indices = set(indices[validation_count:validation_count + test_count])
 
-    train = [item for index, item in enumerate(conversations) if index not in validation_indices]
-    validation = [item for index, item in enumerate(conversations) if index in validation_indices]
+    train = [item for i, item in enumerate(conversations)
+             if i not in validation_indices and i not in test_indices]
+    validation = [item for i, item in enumerate(conversations)
+                  if i in validation_indices]
+    test = [item for i, item in enumerate(conversations) if i in test_indices]
     train_ids = _encode_many(train, tokenizer)
     validation_ids = _encode_many(validation, tokenizer)
+    test_ids = _encode_many(test, tokenizer)
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     train_count, train_sha = _write_u32le(destination / "train.bin", train_ids)
     val_count, val_sha = _write_u32le(destination / "val.bin", validation_ids)
+    test_token_count, test_sha = _write_u32le(destination / "test.bin", test_ids)
     tokenizer.save(destination / "tokenizer.json")
 
-    input_bytes = Path(input_path).read_bytes()
+    source_info = []
+    for source in sources:
+        raw = source.read_bytes()
+        source_info.append({
+            "path": str(source),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        })
+
     manifest: dict[str, Any] = {
         "format": "zika-token-ids-u32le-v1",
+        "schema_version": 2,
         "tokenizer": "char-v0.1",
         "vocab_size": tokenizer.vocab_size,
         "special_tokens": list(SPECIAL_TOKENS),
         "seed": seed,
         "validation_ratio": validation_ratio,
-        "source": str(input_path),
-        "source_sha256": hashlib.sha256(input_bytes).hexdigest(),
+        "test_ratio": test_ratio,
+        "sources": source_info,
+        "unique_conversations": len(conversations),
+        "duplicates_removed": duplicate_count,
         "train": {
             "conversations": len(train), "tokens": train_count,
             "file": "train.bin", "sha256": train_sha,
@@ -182,38 +251,53 @@ def prepare_dataset(
             "conversations": len(validation), "tokens": val_count,
             "file": "val.bin", "sha256": val_sha,
         },
+        "test": {
+            "conversations": len(test), "tokens": test_token_count,
+            "file": "test.bin", "sha256": test_sha,
+        },
     }
-    (destination / "manifest.json").write_text(
+    temporary_manifest = destination / "manifest.json.tmp"
+    temporary_manifest.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    temporary_manifest.replace(destination / "manifest.json")
     return manifest
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Prepara o corpus de treino do ZIKA-AI.")
-    parser.add_argument("--input", default="data/dialogos.jsonl", help="corpus JSONL de origem")
-    parser.add_argument("--output-dir", default="data/processed", help="pasta para os artefactos")
+    parser = argparse.ArgumentParser(description="Prepara o corpus do ZIKA-AI.")
+    parser.add_argument(
+        "--input", nargs="+",
+        default=["data/dialogos.jsonl"],
+        help="um ou mais ficheiros JSONL de origem",
+    )
+    parser.add_argument("--output-dir", default="data/processed")
     parser.add_argument("--validation-ratio", type=float, default=0.1)
+    parser.add_argument("--test-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args(argv)
 
     try:
         manifest = prepare_dataset(
             args.input, args.output_dir,
-            validation_ratio=args.validation_ratio, seed=args.seed,
+            validation_ratio=args.validation_ratio,
+            test_ratio=args.test_ratio,
+            seed=args.seed,
         )
     except (DatasetError, OSError, TokenizerError) as exc:
         print(f"erro: {exc}", file=sys.stderr)
         return 1
 
     print("Corpus preparado com sucesso")
+    for key in ("train", "validation", "test"):
+        section = manifest[key]
+        print(
+            f"  {key:11s} {section['conversations']:5d} conversas, "
+            f"{section['tokens']:7d} tokens"
+        )
     print(
-        f"  treino:     {manifest['train']['conversations']} conversas, "
-        f"{manifest['train']['tokens']} tokens"
-    )
-    print(
-        f"  validacao:  {manifest['validation']['conversations']} conversas, "
-        f"{manifest['validation']['tokens']} tokens"
+        f"  unicas: {manifest['unique_conversations']} | "
+        f"duplicadas removidas: {manifest['duplicates_removed']}"
     )
     print(f"  vocabulario: {manifest['vocab_size']} tokens")
     print(f"  saida:       {Path(args.output_dir)}")

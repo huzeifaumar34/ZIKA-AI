@@ -54,5 +54,5 @@ if(ZIKA_BUILD_TESTS)
 
   add_executable(zika_training_tests tests/test_training.cpp)
   target_link_libraries(zika_training_tests PRIVATE zika_core)
-  add_test(NAME training_overfit_resume COMMAND zika_training_tests)
+  add_test(NAME training_real_dialogues_checkpoint_resume COMMAND zika_training_tests)
 endif()

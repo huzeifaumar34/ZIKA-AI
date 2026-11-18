@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -21,28 +22,38 @@ namespace {
 
 void usage() {
   std::fprintf(stderr,
-               "ZIKA-AI %s\n\n"
-               "Uso:\n"
-               "  zika version\n"
-               "  zika init --config <ficheiro.json> --out <modelo.zika>\n"
-               "  zika info <modelo.zika> [--tensors]\n"
-               "  zika train --config <ficheiro.json> --data <train.bin>\n"
-               "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n\n"
-               "Opcoes de treino:\n"
-               "  --steps N              passos totais (default 500)\n"
-               "  --batch-size N         sequencias por passo (default 1)\n"
-               "  --seq-len N            tokens por sequencia (default 128)\n"
-               "  --learning-rate F      taxa maxima (default 0.0003)\n"
-               "  --warmup-steps N       passos de aquecimento (default 50)\n"
-               "  --weight-decay F       decaimento AdamW (default 0.01)\n"
-               "  --grad-clip F          norma maxima (default 1.0; 0 desativa)\n"
-               "  --min-lr-ratio F       LR final / LR maxima (default 0.1)\n"
-               "  --seed N               semente (default 1337)\n"
-               "  --log-every N          intervalo de log (default 25; 0 desativa)\n"
-               "  --checkpoint-every N   intervalo de checkpoint (default 100)\n"
-               "  --checkpoint PATH      ficheiro de checkpoint\n"
-               "  --resume PATH          retomar de checkpoint\n",
-               ZIKA_VERSION);
+      "ZIKA-AI %s\n\n"
+      "Uso:\n"
+      "  zika version\n"
+      "  zika init --config <ficheiro.json> --out <modelo.zika>\n"
+      "  zika info <modelo.zika> [--tensors]\n"
+      "  zika train --config <ficheiro.json> --data <train.bin>\n"
+      "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n"
+      "  zika eval --model <modelo.zika> --data <test.bin> [opcoes]\n\n"
+      "Opcoes de treino:\n"
+      "  --steps N                   passo total pretendido (default 500)\n"
+      "  --batch-size N              sequencias por passo (default 1)\n"
+      "  --seq-len N                 tokens por sequencia (default 128)\n"
+      "  --learning-rate F           taxa maxima (default 0.0003)\n"
+      "  --warmup-steps N            passos iniciais de aquecimento\n"
+      "  --weight-decay F            decaimento AdamW (default 0.01)\n"
+      "  --grad-clip F               norma maxima (default 1.0; 0 desativa)\n"
+      "  --min-lr-ratio F            LR final / LR maxima (default 0.1)\n"
+      "  --log-every N               intervalo de log (default 25; 0 desativa)\n"
+      "  --eval-every N              avaliacao amostrada (default 100; 0 desativa)\n"
+      "  --eval-tokens N             maximo de tokens por avaliacao (default 2048)\n"
+      "  --full-eval-every N         avaliacao completa (default 500; 0 desativa)\n"
+      "  --resume-warmup-steps N     rampa ao prolongar treino concluido (default 50)\n"
+      "  --resume-legacy-total-steps N  horizonte original para checkpoint ZCKP v1\n"
+      "  --max-steps-this-run N       pausa apos N passos e guarda o checkpoint\n"
+      "  --checkpoint PATH           ficheiro de checkpoint\n"
+      "  --resume PATH               retomar de checkpoint\n\n"
+      "Opcoes de avaliacao:\n"
+      "  --model PATH                modelo .zika treinado\n"
+      "  --data PATH                 tokens uint32 little-endian\n"
+      "  --seq-len N                 comprimento maximo do contexto (default 128)\n"
+      "  --max-tokens N              0 avalia todos; N limita a amostra (default 0)\n",
+      ZIKA_VERSION);
 }
 
 int fail(const std::string &msg) {
@@ -86,12 +97,12 @@ std::string human_size(uint64_t bytes) {
 
 int cmd_init(int argc, char **argv) {
   std::string config_path, out_path;
-  for (int i = 2; i < argc; i++) {
-    const std::string a = argv[i];
-    if ((a == "--config" || a == "--out") && i + 1 < argc)
-      (a == "--config" ? config_path : out_path) = argv[++i];
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if ((arg == "--config" || arg == "--out") && i + 1 < argc)
+      (arg == "--config" ? config_path : out_path) = argv[++i];
     else
-      return fail("argumento desconhecido ou sem valor: " + a);
+      return fail("argumento desconhecido ou sem valor: " + arg);
   }
   if (config_path.empty() || out_path.empty()) {
     usage();
@@ -101,7 +112,6 @@ int cmd_init(int argc, char **argv) {
   ModelSpec spec;
   std::string err = load_spec_json(config_path, spec);
   if (!err.empty()) return fail(config_path + ": " + err);
-
   Tokenizer tok;
   tok.kind = TokenizerKind::Char;
   tok.tokens = default_char_vocab();
@@ -118,50 +128,47 @@ int cmd_init(int argc, char **argv) {
   }
   err = write_zika(model, out_path);
   if (!err.empty()) return fail(err);
-
   std::printf("modelo '%s' criado em %s\n", spec.name.c_str(), out_path.c_str());
   std::printf("  parametros: %llu (pesos a zero; usa 'zika train' para treinar)\n",
-              static_cast<unsigned long long>(param_count(spec.cfg)));
+      static_cast<unsigned long long>(param_count(spec.cfg)));
   return 0;
 }
 
 int cmd_info(int argc, char **argv) {
   std::string path;
   bool show_tensors = false;
-  for (int i = 2; i < argc; i++) {
-    const std::string a = argv[i];
-    if (a == "--tensors") show_tensors = true;
-    else if (path.empty()) path = a;
-    else return fail("argumento a mais: " + a);
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--tensors") show_tensors = true;
+    else if (path.empty()) path = arg;
+    else return fail("argumento a mais: " + arg);
   }
   if (path.empty()) {
     usage();
     return 1;
   }
 
-  Model m;
-  const std::string err = read_zika(path, m);
+  Model model;
+  const std::string err = read_zika(path, model);
   if (!err.empty()) return fail(path + ": " + err);
-
-  const char *dtype = "F32";
-  const char *tok_kind = m.tok.kind == TokenizerKind::Char ? "caracteres" : "BPE";
+  const char *tok_kind = model.tok.kind == TokenizerKind::Char ? "caracteres" : "BPE";
   std::printf("ficheiro:    %s (%s)\n", path.c_str(),
-              human_size(std::filesystem::file_size(path)).c_str());
-  std::printf("formato:     .zika v%u, pesos %s\n", kFormatVersion, dtype);
-  std::printf("camadas:     %u\n", m.cfg.n_layers);
-  std::printf("dimensao:    %u (%u cabecas, d_ff %u)\n", m.cfg.d_model,
-              m.cfg.n_heads, m.cfg.d_ff);
-  std::printf("contexto:    %u\n", m.cfg.ctx_len);
-  std::printf("tokenizer:   %s, %u tokens, %zu regras\n", tok_kind,
-              m.cfg.vocab_size, m.tok.merges.size());
+      human_size(std::filesystem::file_size(path)).c_str());
+  std::printf("formato:     .zika v%u, pesos F32\n", kFormatVersion);
+  std::printf("camadas:     %u\n", model.cfg.n_layers);
+  std::printf("dimensao:    %u (%u cabecas, d_ff %u)\n",
+      model.cfg.d_model, model.cfg.n_heads, model.cfg.d_ff);
+  std::printf("contexto:    %u\n", model.cfg.ctx_len);
+  std::printf("tokenizer:   %s, %u tokens, %zu regras\n",
+      tok_kind, model.cfg.vocab_size, model.tok.merges.size());
   std::printf("parametros:  %llu\n",
-              static_cast<unsigned long long>(param_count(m.cfg)));
-  std::printf("tensores:    %zu\n", m.tensors.size());
+      static_cast<unsigned long long>(param_count(model.cfg)));
+  std::printf("tensores:    %zu\n", model.tensors.size());
   if (show_tensors) {
-    for (const Tensor &t : m.tensors) {
-      std::printf("  %-22s [", t.name.c_str());
-      for (size_t k = 0; k < t.shape.size(); k++)
-        std::printf(k ? ", %u" : "%u", t.shape[k]);
+    for (const Tensor &tensor : model.tensors) {
+      std::printf("  %-22s [", tensor.name.c_str());
+      for (size_t k = 0; k < tensor.shape.size(); ++k)
+        std::printf(k ? ", %u" : "%u", tensor.shape[k]);
       std::printf("]\n");
     }
   }
@@ -189,7 +196,10 @@ int cmd_train(int argc, char **argv) {
     }
     if (arg == "--steps" || arg == "--batch-size" || arg == "--seq-len" ||
         arg == "--warmup-steps" || arg == "--seed" || arg == "--log-every" ||
-        arg == "--checkpoint-every") {
+        arg == "--checkpoint-every" || arg == "--eval-every" ||
+        arg == "--eval-tokens" || arg == "--full-eval-every" ||
+        arg == "--resume-warmup-steps" || arg == "--resume-legacy-total-steps" ||
+        arg == "--max-steps-this-run") {
       if (i + 1 >= argc) return fail("falta valor para " + arg);
       uint64_t value = 0;
       if (!parse_u64(argv[++i], value)) return fail("inteiro invalido para " + arg);
@@ -200,6 +210,12 @@ int cmd_train(int argc, char **argv) {
       else if (arg == "--seed" && value <= UINT32_MAX) cfg.seed = static_cast<uint32_t>(value);
       else if (arg == "--log-every" && value <= UINT32_MAX) cfg.log_every = static_cast<uint32_t>(value);
       else if (arg == "--checkpoint-every") cfg.checkpoint_every = value;
+      else if (arg == "--eval-every" && value <= UINT32_MAX) cfg.eval_every = static_cast<uint32_t>(value);
+      else if (arg == "--eval-tokens" && value <= UINT32_MAX) cfg.eval_tokens = static_cast<uint32_t>(value);
+      else if (arg == "--full-eval-every") cfg.full_eval_every = value;
+      else if (arg == "--resume-warmup-steps" && value <= UINT32_MAX) cfg.resume_warmup_steps = static_cast<uint32_t>(value);
+      else if (arg == "--resume-legacy-total-steps") cfg.legacy_resume_total_steps = value;
+      else if (arg == "--max-steps-this-run") cfg.max_steps_this_run = value;
       else return fail("valor fora do intervalo para " + arg);
       continue;
     }
@@ -252,18 +268,60 @@ int cmd_train(int argc, char **argv) {
 
   std::printf("ZIKA-AI: treino de %s\n", spec.name.c_str());
   std::printf("  parametros: %llu | treino: %zu tokens | validacao: %zu tokens\n",
-              static_cast<unsigned long long>(param_count(spec.cfg)),
-              train_tokens.size(), validation_tokens.size());
+      static_cast<unsigned long long>(param_count(spec.cfg)),
+      train_tokens.size(), validation_tokens.size());
   std::printf("  steps: %llu | batch: %u | seq_len: %u | seed: %u\n",
-              static_cast<unsigned long long>(cfg.steps), cfg.batch_size,
-              cfg.sequence_length, cfg.seed);
+      static_cast<unsigned long long>(cfg.steps), cfg.batch_size,
+      cfg.sequence_length, cfg.seed);
 
   TrainingResult result;
   err = train_model(model, train_tokens, validation_tokens, cfg,
                     out_path, checkpoint_path, resume_path, result);
   if (!err.empty()) return fail(err);
   std::printf("modelo guardado: %s\ncheckpoint: %s\n",
-              out_path.c_str(), checkpoint_path.c_str());
+      out_path.c_str(), checkpoint_path.c_str());
+  return 0;
+}
+
+int cmd_eval(int argc, char **argv) {
+  std::string model_path, data_path;
+  uint64_t sequence_length = 128, max_tokens = 0;
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--model" || arg == "--data" ||
+        arg == "--seq-len" || arg == "--max-tokens") {
+      if (i + 1 >= argc) return fail("falta valor para " + arg);
+      const std::string value = argv[++i];
+      if (arg == "--model") model_path = value;
+      else if (arg == "--data") data_path = value;
+      else {
+        uint64_t parsed = 0;
+        if (!parse_u64(value, parsed)) return fail("inteiro invalido para " + arg);
+        if (arg == "--seq-len") sequence_length = parsed;
+        else max_tokens = parsed;
+      }
+    } else return fail("argumento desconhecido: " + arg);
+  }
+  if (model_path.empty() || data_path.empty() || sequence_length == 0 ||
+      sequence_length > UINT32_MAX)
+    return fail("use --model, --data e --seq-len valido");
+
+  Model model;
+  std::string err = read_zika(model_path, model);
+  if (!err.empty()) return fail(model_path + ": " + err);
+  std::vector<uint32_t> tokens;
+  err = load_token_ids(data_path, model.cfg.vocab_size, tokens);
+  if (!err.empty()) return fail(err);
+  try {
+    const float loss = evaluate_loss(model, tokens,
+        static_cast<uint32_t>(sequence_length), max_tokens);
+    std::printf("eval_loss %.6f | tokens %zu | modo %s\n",
+        loss, max_tokens == 0 ? tokens.size() - 1 :
+        std::min<uint64_t>(max_tokens, tokens.size() - 1),
+        max_tokens == 0 ? "completo" : "amostrado");
+  } catch (const std::exception &ex) {
+    return fail(ex.what());
+  }
   return 0;
 }
 
@@ -282,6 +340,7 @@ int main(int argc, char **argv) {
   if (cmd == "init") return cmd_init(argc, argv);
   if (cmd == "info") return cmd_info(argc, argv);
   if (cmd == "train") return cmd_train(argc, argv);
+  if (cmd == "eval") return cmd_eval(argc, argv);
   if (cmd == "help" || cmd == "--help" || cmd == "-h") {
     usage();
     return 0;

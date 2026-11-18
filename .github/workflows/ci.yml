@@ -2,15 +2,22 @@ name: ZIKA-AI CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "engineering/**"]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate workflow YAML
+        run: |
+          ruby -e 'require "yaml"; Dir.glob(".github/workflows/*.yml").each { |path| YAML.parse_file(path); puts "YAML valido: #{path}" }'
 
       - name: Configure C++
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DZIKA_NATIVE=OFF
@@ -24,6 +31,7 @@ jobs:
       - name: CLI smoke test
         run: |
           ./build/zika version
+          ./build/zika help
           ./build/zika init --config configs/nano.json --out /tmp/zika-nano-empty.zika
           ./build/zika info /tmp/zika-nano-empty.zika
 
@@ -36,30 +44,30 @@ jobs:
           PYTHONPATH: python
         run: python -m unittest discover -s python/tests -v
 
-      - name: Prepare and validate sample corpus
+      - name: Prepare and audit corpus
         env:
           PYTHONPATH: python
         run: |
           python -m zika.data \
-            --input data/dialogos.jsonl \
+            --input data/dialogos.jsonl data/dialogos_extra.jsonl \
             --output-dir "$RUNNER_TEMP/zika-data"
           python - <<'PY'
           import json
           import os
           from pathlib import Path
-          import struct
           root = Path(os.environ["RUNNER_TEMP"]) / "zika-data"
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           assert manifest["vocab_size"] == 124
+          assert manifest["unique_conversations"] >= 100
           assert manifest["train"]["conversations"] > 0
           assert manifest["validation"]["conversations"] > 0
-          for name in ("train.bin", "val.bin"):
+          assert manifest["test"]["conversations"] > 0
+          for key, name in (("train", "train.bin"), ("validation", "val.bin"), ("test", "test.bin")):
               payload = (root / name).read_bytes()
-              assert len(payload) % 4 == 0
-              assert payload
-              struct.unpack("<I", payload[:4])
-          print("Dataset validado:", manifest["train"]["tokens"], "tokens de treino;",
-                manifest["validation"]["tokens"], "tokens de validacao")
+              assert payload and len(payload) % 4 == 0
+              assert len(payload) == manifest[key]["tokens"] * 4
+          print("Corpus auditado:", manifest["unique_conversations"], "conversas unicas;",
+                manifest["duplicates_removed"], "duplicadas removidas")
           PY
 
       - name: ZIKA-Nano training smoke test
@@ -70,18 +78,25 @@ jobs:
             --val-data "$RUNNER_TEMP/zika-data/val.bin" \
             --out "$RUNNER_TEMP/zika-nano-smoke.zika" \
             --checkpoint "$RUNNER_TEMP/zika-nano-smoke.ckpt" \
-            --steps 2 \
+            --steps 3 \
             --batch-size 1 \
             --seq-len 8 \
             --warmup-steps 1 \
             --log-every 1 \
+            --eval-every 1 \
+            --eval-tokens 64 \
+            --full-eval-every 0 \
             --checkpoint-every 1
           ./build/zika info "$RUNNER_TEMP/zika-nano-smoke.zika"
+          ./build/zika eval \
+            --model "$RUNNER_TEMP/zika-nano-smoke.zika" \
+            --data "$RUNNER_TEMP/zika-data/test.bin" \
+            --seq-len 8
 
       - name: Upload processed dataset
         uses: actions/upload-artifact@v4
         with:
-          name: zika-phase3-dataset
+          name: zika-dataset-audit
           path: ${{ runner.temp }}/zika-data/
           if-no-files-found: error
           retention-days: 14
@@ -89,7 +104,7 @@ jobs:
       - name: Upload training smoke result
         uses: actions/upload-artifact@v4
         with:
-          name: zika-phase4-smoke
+          name: zika-training-smoke
           path: |
             ${{ runner.temp }}/zika-nano-smoke.zika
             ${{ runner.temp }}/zika-nano-smoke.ckpt

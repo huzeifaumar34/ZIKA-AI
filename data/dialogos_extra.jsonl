@@ -1,0 +1,92 @@
+{"turns":[{"role":"user","text":"Como dividir uma tarefa grande?"},{"role":"ia","text":"Escreve o resultado esperado, separa o trabalho em etapas pequenas e define um criterio claro para concluir cada etapa."}]}
+{"turns":[{"role":"user","text":"Como escolher prioridades?"},{"role":"ia","text":"Compara o impacto, a urgencia e o esforco. Comeca pelo que desbloqueia outras tarefas importantes."}]}
+{"turns":[{"role":"user","text":"Como fazer boas notas de estudo?"},{"role":"ia","text":"Regista ideias com palavras tuas, organiza os conceitos por assunto e acrescenta exemplos que ajudem a recordar."}]}
+{"turns":[{"role":"user","text":"Como preparar uma apresentacao?"},{"role":"ia","text":"Define a mensagem principal, organiza poucas ideias em sequencia e ensaia em voz alta com controlo do tempo."}]}
+{"turns":[{"role":"user","text":"Como rever um texto?"},{"role":"ia","text":"Revê primeiro a estrutura e a clareza. Depois corrige frases confusas, repeticoes, ortografia e pontuacao."}]}
+{"turns":[{"role":"user","text":"O que e pensamento critico?"},{"role":"ia","text":"E avaliar afirmacoes com perguntas, provas e raciocinio, em vez de aceitar uma ideia apenas porque parece convincente."}]}
+{"turns":[{"role":"user","text":"Como verificar uma informacao?"},{"role":"ia","text":"Procura a origem, confirma a data, compara fontes independentes e distingue factos observados de opinioes."}]}
+{"turns":[{"role":"user","text":"O que e uma hipotese?"},{"role":"ia","text":"E uma explicacao provisoria que pode ser testada por observacoes ou experiencias."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre correlacao e causalidade?"},{"role":"ia","text":"Correlacao indica que duas variaveis mudam em conjunto. Causalidade significa que uma contribui para provocar a outra."}]}
+{"turns":[{"role":"user","text":"O que e uma amostra?"},{"role":"ia","text":"E um subconjunto de uma populacao usado para estudar caracteristicas do conjunto maior."}]}
+{"turns":[{"role":"user","text":"Para que serve a mediana?"},{"role":"ia","text":"A mediana e o valor central de uma lista ordenada. E menos influenciada por valores extremos do que a media."}]}
+{"turns":[{"role":"user","text":"O que representa uma percentagem?"},{"role":"ia","text":"Representa uma quantidade por cada cem unidades. Pode ser usada para comparar proporcoes."}]}
+{"turns":[{"role":"user","text":"Como calcular uma media simples?"},{"role":"ia","text":"Soma todos os valores e divide o resultado pela quantidade de valores."}]}
+{"turns":[{"role":"user","text":"O que e uma variavel independente?"},{"role":"ia","text":"E a variavel que o investigador altera ou escolhe para observar o efeito noutra variavel."}]}
+{"turns":[{"role":"user","text":"O que e uma variavel dependente?"},{"role":"ia","text":"E a medida observada numa experiencia, que pode mudar em resposta a outra variavel."}]}
+{"turns":[{"role":"user","text":"Porque repetimos uma experiencia?"},{"role":"ia","text":"A repeticao ajuda a verificar se o resultado e consistente e reduz a influencia de acontecimentos ocasionais."}]}
+{"turns":[{"role":"user","text":"O que e energia cinetica?"},{"role":"ia","text":"E a energia associada ao movimento de um corpo. Depende da massa e da velocidade."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre massa e peso?"},{"role":"ia","text":"Massa mede a quantidade de materia. Peso e a forca gravitacional exercida sobre essa massa."}]}
+{"turns":[{"role":"user","text":"O que e uma corrente eletrica?"},{"role":"ia","text":"E o movimento ordenado de cargas eletricas atraves de um material condutor."}]}
+{"turns":[{"role":"user","text":"Para que serve uma resistencia num circuito?"},{"role":"ia","text":"A resistencia limita a corrente e cria uma queda de tensao, ajudando a controlar o funcionamento do circuito."}]}
+{"turns":[{"role":"user","text":"O que e energia renovavel?"},{"role":"ia","text":"E energia obtida de fontes que se renovam naturalmente, como o sol, o vento e a agua em movimento."}]}
+{"turns":[{"role":"user","text":"Como funciona um painel solar?"},{"role":"ia","text":"As celulas fotovoltaicas convertem parte da energia da luz em energia eletrica."}]}
+{"turns":[{"role":"user","text":"O que e evaporacao?"},{"role":"ia","text":"E a passagem de um liquido para o estado gasoso a partir da sua superficie."}]}
+{"turns":[{"role":"user","text":"O que e condensacao?"},{"role":"ia","text":"E a passagem de uma substancia do estado gasoso para o estado liquido, normalmente por arrefecimento."}]}
+{"turns":[{"role":"user","text":"Porque o ceu parece azul?"},{"role":"ia","text":"As moleculas do ar dispersam mais a luz azul do que a luz vermelha, fazendo a luz azul chegar aos nossos olhos de muitas direcoes."}]}
+{"turns":[{"role":"user","text":"O que e biodiversidade?"},{"role":"ia","text":"E a variedade de seres vivos, genes e ecossistemas existentes numa regiao ou em todo o planeta."}]}
+{"turns":[{"role":"user","text":"Porque as plantas precisam de luz?"},{"role":"ia","text":"A luz fornece energia para a fotossintese, processo usado pelas plantas para produzir materia organica."}]}
+{"turns":[{"role":"user","text":"O que e uma cadeia alimentar?"},{"role":"ia","text":"E uma sequencia de organismos em que cada um serve de alimento ao seguinte, transferindo materia e energia."}]}
+{"turns":[{"role":"user","text":"O que significa reciclar?"},{"role":"ia","text":"Significa transformar materiais usados em materias-primas ou novos produtos, reduzindo a necessidade de recursos virgens."}]}
+{"turns":[{"role":"user","text":"Como reduzir o consumo de agua?"},{"role":"ia","text":"Repara fugas, fecha a torneira quando nao e necessaria e escolhe equipamentos eficientes."}]}
+{"turns":[{"role":"user","text":"Qual a funcao do sistema operativo?"},{"role":"ia","text":"Gere o hardware, organiza ficheiros, controla processos e fornece servicos que as aplicacoes utilizam."}]}
+{"turns":[{"role":"user","text":"O que e um processo num sistema operativo?"},{"role":"ia","text":"E um programa em execucao, com memoria, estado e recursos associados."}]}
+{"turns":[{"role":"user","text":"O que e uma thread?"},{"role":"ia","text":"E uma linha de execucao dentro de um processo. Threads do mesmo processo podem partilhar memoria."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre RAM e armazenamento?"},{"role":"ia","text":"A RAM guarda dados temporarios usados durante a execucao. O armazenamento conserva ficheiros mesmo sem energia."}]}
+{"turns":[{"role":"user","text":"O que e um sistema de ficheiros?"},{"role":"ia","text":"E a estrutura e o conjunto de regras usados para organizar ficheiros e diretorios num dispositivo."}]}
+{"turns":[{"role":"user","text":"O que e uma extensao de ficheiro?"},{"role":"ia","text":"E uma parte do nome, muitas vezes depois do ponto, usada para indicar o formato ou o tipo do ficheiro."}]}
+{"turns":[{"role":"user","text":"Porque devemos fazer copias de seguranca?"},{"role":"ia","text":"Uma copia de seguranca permite recuperar dados depois de falhas, perdas, danos ou ataques."}]}
+{"turns":[{"role":"user","text":"O que e uma soma de verificacao?"},{"role":"ia","text":"E um valor calculado a partir de dados para ajudar a detetar alteracoes ou corrupcao."}]}
+{"turns":[{"role":"user","text":"O que e uma funcao hash?"},{"role":"ia","text":"E uma funcao que transforma dados de tamanho variavel num resumo de tamanho fixo, com propriedades definidas pelo algoritmo."}]}
+{"turns":[{"role":"user","text":"Para que serve o controlo de versoes?"},{"role":"ia","text":"Regista alteracoes ao longo do tempo, facilita a colaboracao e permite recuperar estados anteriores do projeto."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre Git e GitHub?"},{"role":"ia","text":"Git e um sistema de controlo de versoes. GitHub e uma plataforma que aloja repositorios Git e acrescenta ferramentas de colaboracao."}]}
+{"turns":[{"role":"user","text":"O que e uma branch?"},{"role":"ia","text":"E uma linha de desenvolvimento independente que permite trabalhar numa alteracao sem modificar imediatamente a linha principal."}]}
+{"turns":[{"role":"user","text":"Para que serve um pull request?"},{"role":"ia","text":"Permite apresentar alteracoes para revisao, discutir o codigo e decidir quando integrar uma branch."}]}
+{"turns":[{"role":"user","text":"O que e integracao continua?"},{"role":"ia","text":"E a pratica de compilar e testar automaticamente as alteracoes para detetar problemas cedo."}]}
+{"turns":[{"role":"user","text":"O que e um teste unitario?"},{"role":"ia","text":"Verifica uma unidade pequena de codigo de forma isolada, com entradas conhecidas e resultados esperados."}]}
+{"turns":[{"role":"user","text":"O que e um teste de regressao?"},{"role":"ia","text":"Verifica se uma alteracao recente voltou a introduzir um erro que ja tinha sido corrigido."}]}
+{"turns":[{"role":"user","text":"Porque devemos tratar erros explicitamente?"},{"role":"ia","text":"O tratamento explicito permite comunicar falhas, proteger o estado do programa e evitar resultados silenciosamente incorretos."}]}
+{"turns":[{"role":"user","text":"O que e uma excecao?"},{"role":"ia","text":"E um mecanismo para sinalizar uma condicao anormal e transferir o controlo para um bloco que pode tratar o problema."}]}
+{"turns":[{"role":"user","text":"O que e uma API REST?"},{"role":"ia","text":"E uma interface web que expoe recursos por URLs e usa metodos HTTP para consultar ou alterar esses recursos."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre HTTP e HTTPS?"},{"role":"ia","text":"HTTPS protege a comunicacao HTTP com TLS, ajudando a garantir confidencialidade e autenticidade do servidor."}]}
+{"turns":[{"role":"user","text":"O que e DNS?"},{"role":"ia","text":"E o sistema que associa nomes de dominio a informacoes de rede, incluindo enderecos IP."}]}
+{"turns":[{"role":"user","text":"O que e um endereco IP?"},{"role":"ia","text":"E um identificador numerico usado para encaminhar pacotes entre interfaces numa rede IP."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre TCP e UDP?"},{"role":"ia","text":"TCP oferece uma ligacao fiavel e ordenada. UDP envia datagramas sem garantir entrega ou ordem."}]}
+{"turns":[{"role":"user","text":"O que e latencia numa rede?"},{"role":"ia","text":"E o tempo que um pacote demora a viajar entre dois pontos, normalmente medido em milissegundos."}]}
+{"turns":[{"role":"user","text":"O que e largura de banda?"},{"role":"ia","text":"E a capacidade de transmissao de dados de uma ligacao por unidade de tempo."}]}
+{"turns":[{"role":"user","text":"O que e criptografia?"},{"role":"ia","text":"E o uso de tecnicas matematicas para proteger informacao, por exemplo tornando-a ilegivel sem a chave adequada."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre cifrar e fazer hash?"},{"role":"ia","text":"A cifragem e reversivel com uma chave. Um hash criptografico foi concebido para nao permitir recuperar diretamente a mensagem original."}]}
+{"turns":[{"role":"user","text":"Porque nao devemos reutilizar palavras-passe?"},{"role":"ia","text":"Uma fuga num servico pode permitir tentativas de acesso a outras contas que usam a mesma palavra-passe."}]}
+{"turns":[{"role":"user","text":"Para que serve a autenticacao multifator?"},{"role":"ia","text":"Acrescenta uma prova de identidade alem da palavra-passe, dificultando o acesso indevido quando uma credencial e roubada."}]}
+{"turns":[{"role":"user","text":"O que e phishing?"},{"role":"ia","text":"E uma tentativa de enganar alguem para obter credenciais ou dados, muitas vezes usando mensagens ou paginas falsas."}]}
+{"turns":[{"role":"user","text":"Como reconhecer uma mensagem suspeita?"},{"role":"ia","text":"Desconfia de urgencia incomum, pedidos de codigos, anexos inesperados e dominios que imitam servicos conhecidos."}]}
+{"turns":[{"role":"user","text":"O que significa codigo aberto?"},{"role":"ia","text":"Significa que o codigo-fonte esta disponivel sob uma licenca que define como pode ser usado, estudado, modificado e distribuido."}]}
+{"turns":[{"role":"user","text":"Porque e importante ler uma licenca?"},{"role":"ia","text":"A licenca define direitos e obrigacoes. O facto de um ficheiro estar acessivel nao significa que possa ser usado sem restricoes."}]}
+{"turns":[{"role":"user","text":"O que e uma variavel de ambiente?"},{"role":"ia","text":"E um valor associado ao ambiente do processo, usado para configurar programas sem alterar o codigo-fonte."}]}
+{"turns":[{"role":"user","text":"O que e um ficheiro de configuracao?"},{"role":"ia","text":"Guarda opcoes que controlam o comportamento de um programa, separando parametros do codigo executavel."}]}
+{"turns":[{"role":"user","text":"O que e serializacao?"},{"role":"ia","text":"E a conversao de estruturas de dados para um formato que pode ser guardado ou transmitido e reconstruido depois."}]}
+{"turns":[{"role":"user","text":"Porque definir um formato binario com versao?"},{"role":"ia","text":"Uma versao explicita ajuda programas a reconhecer alteracoes de estrutura e a rejeitar ficheiros incompativeis."}]}
+{"turns":[{"role":"user","text":"O que e endianness?"},{"role":"ia","text":"Descreve a ordem dos bytes usada para representar valores com varios bytes na memoria ou num ficheiro."}]}
+{"turns":[{"role":"user","text":"Qual a diferenca entre float32 e float16?"},{"role":"ia","text":"float32 usa 32 bits e costuma oferecer maior precisao. float16 usa 16 bits, ocupa menos memoria e tem menor intervalo e precisao."}]}
+{"turns":[{"role":"user","text":"O que e quantizacao de um modelo?"},{"role":"ia","text":"E a conversao dos pesos ou ativacoes para representacoes numericas de menor precisao, reduzindo memoria e por vezes acelerando a inferencia."}]}
+{"turns":[{"role":"user","text":"O que e inferencia em inteligencia artificial?"},{"role":"ia","text":"E a utilizacao de um modelo ja treinado para produzir previsoes ou gerar respostas a partir de novos dados."}]}
+{"turns":[{"role":"user","text":"O que e pre-treino?"},{"role":"ia","text":"E uma etapa inicial em que o modelo aprende padroes gerais a partir de um conjunto amplo de dados antes de uma adaptacao mais especifica."}]}
+{"turns":[{"role":"user","text":"O que e ajuste fino?"},{"role":"ia","text":"E continuar o treino de um modelo com dados mais especificos para adaptar o seu comportamento a uma tarefa ou dominio."}]}
+{"turns":[{"role":"user","text":"O que e um token num modelo de linguagem?"},{"role":"ia","text":"E uma unidade de texto processada pelo modelo. Pode representar um caractere, parte de uma palavra ou uma palavra inteira."}]}
+{"turns":[{"role":"user","text":"O que e um vocabulario de tokenizer?"},{"role":"ia","text":"E o conjunto de tokens que o tokenizer consegue representar, cada um associado a um identificador."}]}
+{"turns":[{"role":"user","text":"Qual a vantagem de BPE sobre tokens de caracteres?"},{"role":"ia","text":"BPE combina sequencias frequentes em unidades maiores, reduzindo o numero de tokens necessario para representar muito texto."}]}
+{"turns":[{"role":"user","text":"O que e uma janela de contexto?"},{"role":"ia","text":"E a quantidade maxima de tokens que o modelo considera numa entrada durante a inferencia ou o treino."}]}
+{"turns":[{"role":"user","text":"O que e uma embedding?"},{"role":"ia","text":"E um vetor aprendido que representa um token ou outro elemento num espaco numerico."}]}
+{"turns":[{"role":"user","text":"O que e atencao num Transformer?"},{"role":"ia","text":"E um mecanismo que calcula quanto cada posicao deve considerar outras posicoes relevantes da sequencia."}]}
+{"turns":[{"role":"user","text":"Porque a atencao causal e importante num GPT?"},{"role":"ia","text":"Impede que a previsao de um token use tokens que ainda nao foram gerados, preservando a ordem autoregressiva."}]}
+{"turns":[{"role":"user","text":"O que e uma funcao de ativacao?"},{"role":"ia","text":"E uma transformacao aplicada a sinais de uma rede neural para permitir que o modelo represente relacoes nao lineares."}]}
+{"turns":[{"role":"user","text":"O que e backpropagation?"},{"role":"ia","text":"E o metodo que calcula como o erro varia em relacao aos parametros, propagando gradientes pela rede."}]}
+{"turns":[{"role":"user","text":"O que e uma epoca de treino?"},{"role":"ia","text":"E uma passagem completa pelo conjunto de exemplos, embora alguns processos usem amostragem em vez de percorrer os dados sequencialmente."}]}
+{"turns":[{"role":"user","text":"O que e um batch?"},{"role":"ia","text":"E um grupo de exemplos processado para calcular uma atualizacao dos parametros ou uma parte dessa atualizacao."}]}
+{"turns":[{"role":"user","text":"Porque separar treino, validacao e teste?"},{"role":"ia","text":"Treino ajusta os pesos, validacao ajuda a escolher configuracoes e teste mede o resultado final em dados que ficaram de fora."}]}
+{"turns":[{"role":"user","text":"O que e fuga de dados?"},{"role":"ia","text":"Acontece quando informacao do conjunto de validacao ou teste influencia o treino, tornando a avaliacao demasiado otimista."}]}
+{"turns":[{"role":"user","text":"O que e overfitting?"},{"role":"ia","text":"E quando o modelo se ajusta demasiado aos exemplos de treino e perde desempenho em dados novos."}]}
+{"turns":[{"role":"user","text":"Como reduzir overfitting?"},{"role":"ia","text":"Usa dados variados, valida exemplos separados, ajusta a capacidade do modelo e considera regularizacao ou paragem antecipada."}]}
+{"turns":[{"role":"user","text":"Porque uma loss baixa nao prova que um chatbot e bom?"},{"role":"ia","text":"A loss mede a capacidade de prever tokens de referencia. Nao mede por si so utilidade, factualidade, seguranca ou coerencia dialogica."}]}
+{"turns":[{"role":"user","text":"Como avaliar um assistente conversacional?"},{"role":"ia","text":"Combina metricas automaticas com exemplos de teste, rubricas humanas e verificacoes de factualidade, coerencia e robustez."}]}
+{"turns":[{"role":"user","text":"O que e uma benchmark?"},{"role":"ia","text":"E um conjunto de tarefas e criterios definidos para comparar sistemas de forma repetivel."}]}
+{"turns":[{"role":"user","text":"Porque documentar experiencias de treino?"},{"role":"ia","text":"Registar dados, configuracoes, versoes, seeds e resultados permite reproduzir experiencias e perceber de onde vem cada melhoria."}]}

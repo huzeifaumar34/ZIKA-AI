@@ -62,21 +62,33 @@ class DatasetTests(unittest.TestCase):
             with self.assertRaisesRegex(DatasetError, ":1: JSON invalido"):
                 load_jsonl(path)
 
-    def test_prepare_is_deterministic_and_writes_uint32le(self):
+    def test_duplicate_conversations_are_removed_across_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            a, b = root / "a.jsonl", root / "b.jsonl"
+            row = json.dumps(SAMPLE, ensure_ascii=False) + "\n"
+            a.write_text(row, encoding="utf-8")
+            b.write_text(row.replace("Ola!", "OLA!"), encoding="utf-8")
+            # Exact semantic normalisation is case-insensitive and stable.
+            self.assertEqual(len(load_jsonl([a, b])), 1)
+
+    def test_three_way_split_is_deterministic_and_disjoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "dialogos.jsonl"
-            rows = [SAMPLE, {
-                "turns": [
-                    {"role": "user", "text": "O que e energia solar?"},
-                    {"role": "ia", "text": "E energia obtida da luz do sol."},
-                ]
-            }, {
-                "turns": [
-                    {"role": "user", "text": "Como estudar melhor?"},
-                    {"role": "ia", "text": "Divide o estudo em blocos curtos."},
-                ]
-            }]
+            rows = [
+                SAMPLE,
+                {"turns": [{"role": "user", "text": "O que e energia solar?"},
+                           {"role": "ia", "text": "E energia obtida da luz do sol."}]},
+                {"turns": [{"role": "user", "text": "Como estudar melhor?"},
+                           {"role": "ia", "text": "Divide o estudo em blocos curtos."}]},
+                {"turns": [{"role": "user", "text": "O que e memoria RAM?"},
+                           {"role": "ia", "text": "E memoria temporaria usada pelos programas."}]},
+                {"turns": [{"role": "user", "text": "Para que serve o Git?"},
+                           {"role": "ia", "text": "Regista alteracoes no projeto."}]},
+                {"turns": [{"role": "user", "text": "O que e uma API?"},
+                           {"role": "ia", "text": "Define como programas comunicam."}]},
+            ]
             source.write_text(
                 "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
                 encoding="utf-8",
@@ -85,28 +97,32 @@ class DatasetTests(unittest.TestCase):
             manifest_a = prepare_dataset(source, out_a, seed=7)
             manifest_b = prepare_dataset(source, out_b, seed=7)
             self.assertEqual(manifest_a, manifest_b)
-            self.assertEqual(manifest_a["train"]["conversations"], 2)
+            self.assertEqual(manifest_a["train"]["conversations"], 4)
             self.assertEqual(manifest_a["validation"]["conversations"], 1)
-            train_bytes = (out_a / "train.bin").read_bytes()
-            self.assertEqual(len(train_bytes) % 4, 0)
-            first_id = struct.unpack("<I", train_bytes[:4])[0]
-            self.assertEqual(first_id, 0)
-            self.assertEqual(
-                (out_a / "train.bin").read_bytes(),
-                (out_b / "train.bin").read_bytes(),
-            )
+            self.assertEqual(manifest_a["test"]["conversations"], 1)
+            for name in ("train.bin", "val.bin", "test.bin"):
+                raw_a = (out_a / name).read_bytes()
+                raw_b = (out_b / name).read_bytes()
+                self.assertEqual(raw_a, raw_b)
+                self.assertGreater(len(raw_a), 0)
+                self.assertEqual(len(raw_a) % 4, 0)
+                self.assertEqual(struct.unpack("<I", raw_a[:4])[0], 0)
             self.assertTrue((out_a / "manifest.json").exists())
             self.assertTrue((out_a / "tokenizer.json").exists())
 
-    def test_invalid_validation_ratio(self):
+    def test_invalid_split_ratios_and_too_small_corpus(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "source.jsonl"
+            root = Path(tmp)
+            path = root / "source.jsonl"
             path.write_text(
-                json.dumps(SAMPLE) + "\n" + json.dumps(SAMPLE) + "\n",
+                "".join(json.dumps(SAMPLE) + "\n" for _ in range(3)),
                 encoding="utf-8",
             )
             with self.assertRaises(DatasetError):
-                prepare_dataset(path, Path(tmp) / "out", validation_ratio=1.0)
+                prepare_dataset(path, root / "out", validation_ratio=0.7)
+            path.write_text(json.dumps(SAMPLE) + "\n", encoding="utf-8")
+            with self.assertRaises(DatasetError):
+                prepare_dataset(path, root / "out")
 
 
 if __name__ == "__main__":
