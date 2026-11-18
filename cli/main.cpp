@@ -45,6 +45,7 @@ void usage() {
       "  --full-eval-every N         avaliacao completa (default 500; 0 desativa)\n"
       "  --resume-warmup-steps N     rampa ao prolongar treino concluido (default 50)\n"
       "  --resume-legacy-total-steps N  horizonte original para checkpoint ZCKP v1\n"
+      "  --max-steps-this-run N       pausa apos N passos e guarda o checkpoint\n"
       "  --checkpoint PATH           ficheiro de checkpoint\n"
       "  --resume PATH               retomar de checkpoint\n\n"
       "Opcoes de avaliacao:\n"
@@ -197,7 +198,8 @@ int cmd_train(int argc, char **argv) {
         arg == "--warmup-steps" || arg == "--seed" || arg == "--log-every" ||
         arg == "--checkpoint-every" || arg == "--eval-every" ||
         arg == "--eval-tokens" || arg == "--full-eval-every" ||
-        arg == "--resume-warmup-steps" || arg == "--resume-legacy-total-steps") {
+        arg == "--resume-warmup-steps" || arg == "--resume-legacy-total-steps" ||
+        arg == "--max-steps-this-run") {
       if (i + 1 >= argc) return fail("falta valor para " + arg);
       uint64_t value = 0;
       if (!parse_u64(argv[++i], value)) return fail("inteiro invalido para " + arg);
@@ -213,6 +215,7 @@ int cmd_train(int argc, char **argv) {
       else if (arg == "--full-eval-every") cfg.full_eval_every = value;
       else if (arg == "--resume-warmup-steps" && value <= UINT32_MAX) cfg.resume_warmup_steps = static_cast<uint32_t>(value);
       else if (arg == "--resume-legacy-total-steps") cfg.legacy_resume_total_steps = value;
+      else if (arg == "--max-steps-this-run") cfg.max_steps_this_run = value;
       else return fail("valor fora do intervalo para " + arg);
       continue;
     }

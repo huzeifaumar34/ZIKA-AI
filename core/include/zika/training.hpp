@@ -25,6 +25,7 @@ struct TrainingConfig {
   uint32_t eval_tokens = 2048;           // maximo de tokens por avaliacao amostrada
   uint64_t full_eval_every = 500;        // 0 desativa avaliacao completa periodica
   uint32_t resume_warmup_steps = 50;     // rampa suave ao prolongar um treino ja concluido
+  uint64_t max_steps_this_run = 0;        // 0 executa ate ao alvo; util para pausas controladas
   uint64_t legacy_resume_total_steps = 0; // obrigatorio apenas para checkpoints ZCKP v1
 };
 

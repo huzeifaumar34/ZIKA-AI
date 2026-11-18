@@ -160,7 +160,10 @@ float schedule_learning_rate(uint64_t step, const SchedulerState &s) {
       1.0, static_cast<double>(step - decay_start) /
                static_cast<double>(s.segment_end_step - decay_start));
   const double cosine = 0.5 * (1.0 + std::cos(3.14159265358979323846 * progress));
-  return static_cast<float>(s.min_lr + (s.base_lr - s.min_lr) * cosine);
+  const float decay_start_lr =
+      s.segment_warmup_end_step > s.segment_start_step
+          ? s.base_lr : s.segment_start_lr;
+  return static_cast<float>(s.min_lr + (decay_start_lr - s.min_lr) * cosine);
 }
 
 SchedulerState fresh_scheduler(const TrainingConfig &cfg) {
@@ -300,9 +303,10 @@ std::string load_checkpoint(const std::string &path, Model &model,
     if (std::abs(scheduler.base_lr - cfg.learning_rate) > 1.0e-9f ||
         std::abs(scheduler.weight_decay - cfg.weight_decay) > 1.0e-9f ||
         std::abs(scheduler.max_grad_norm - cfg.max_grad_norm) > 1.0e-9f ||
+        std::abs(scheduler.min_lr - cfg.learning_rate * cfg.min_learning_rate_ratio) > 1.0e-9f ||
         scheduler.batch_size != cfg.batch_size ||
         scheduler.sequence_length != cfg.sequence_length)
-      return "a configuracao de treino difere do checkpoint (batch, seq-len, LR, weight decay ou grad clip)";
+      return "a configuracao de treino difere do checkpoint (batch, seq-len, LR, min-LR, weight decay ou grad clip)";
   }
 
   if (model_size > r.left() || optimizer_size > r.left() - model_size ||
@@ -483,6 +487,11 @@ std::string train_model(Model &model,
       return "--steps nao pode ser inferior ao horizonte guardado no checkpoint";
     if (cfg.steps > scheduler.segment_end_step)
       extend_scheduler(scheduler, result.initial_step, cfg.steps, cfg.resume_warmup_steps);
+    const uint64_t remaining_steps = cfg.steps - result.initial_step;
+    const uint64_t run_end_step = (cfg.max_steps_this_run == 0 ||
+                                   cfg.max_steps_this_run >= remaining_steps)
+                                      ? cfg.steps
+                                      : result.initial_step + cfg.max_steps_this_run;
 
     result.initial_learning_rate = schedule_learning_rate(result.initial_step, scheduler);
     result.initial_train_loss = evaluate_loss(
@@ -497,7 +506,7 @@ std::string train_model(Model &model,
 
     std::uniform_int_distribution<size_t> choose_start(
         0, train_tokens.size() - static_cast<size_t>(sequence_length) - 1);
-    for (uint64_t step = optimizer.step_count() + 1; step <= cfg.steps; ++step) {
+    for (uint64_t step = optimizer.step_count() + 1; step <= run_end_step; ++step) {
       const float learning_rate = schedule_learning_rate(step, scheduler);
       optimizer.set_learning_rate(learning_rate);
       scheduler.current_lr = learning_rate;
@@ -527,14 +536,14 @@ std::string train_model(Model &model,
         return "treino interrompido: pesos NaN ou infinitos detetados";
 
       if (cfg.log_every > 0 &&
-          (step % cfg.log_every == 0 || step == cfg.steps)) {
+          (step % cfg.log_every == 0 || step == run_end_step)) {
         std::cout << "step " << step << "/" << cfg.steps
                   << " batch_loss " << (batch_loss / cfg.batch_size)
                   << " lr " << learning_rate << "\n";
       }
 
       if (cfg.eval_every > 0 &&
-          (step % cfg.eval_every == 0 || step == cfg.steps)) {
+          (step % cfg.eval_every == 0 || step == run_end_step)) {
         const float train_sample = evaluate_loss(
             model, train_tokens, sequence_length, cfg.eval_tokens);
         const float val_sample = evaluate_loss(
@@ -544,7 +553,7 @@ std::string train_model(Model &model,
                   << " train_sample_loss " << train_sample
                   << " val_sample_loss " << val_sample;
         if (cfg.full_eval_every > 0 &&
-            (step % cfg.full_eval_every == 0 || step == cfg.steps)) {
+            (step % cfg.full_eval_every == 0 || step == run_end_step)) {
           const float full_val = evaluate_loss(
               model, validation_tokens, sequence_length, 0);
           ++result.full_evaluations;
@@ -552,7 +561,7 @@ std::string train_model(Model &model,
         }
         std::cout << "\n";
       } else if (cfg.full_eval_every > 0 &&
-                 (step % cfg.full_eval_every == 0 || step == cfg.steps)) {
+                 (step % cfg.full_eval_every == 0 || step == run_end_step)) {
         const float full_val = evaluate_loss(
             model, validation_tokens, sequence_length, 0);
         ++result.full_evaluations;

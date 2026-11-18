@@ -123,6 +123,67 @@ void test_real_text_training_and_sampled_evaluation() {
   CHECK(result.final_validation_loss < initial_validation);
 }
 
+
+bool same_weights(const Model &a, const Model &b) {
+  if (a.tensors.size() != b.tensors.size()) return false;
+  for (size_t i = 0; i < a.tensors.size(); ++i) {
+    if (a.tensors[i].name != b.tensors[i].name ||
+        a.tensors[i].data.size() != b.tensors[i].data.size()) return false;
+    for (size_t j = 0; j < a.tensors[i].data.size(); ++j)
+      if (a.tensors[i].data[j] != b.tensors[i].data[j]) return false;
+  }
+  return true;
+}
+
+void test_interrupted_resume_matches_continuous_training() {
+  const auto root = std::filesystem::temp_directory_path() / "zika_resume_exact_test";
+  std::filesystem::remove_all(root);
+  std::filesystem::create_directories(root);
+  const std::string checkpoint = (root / "paused.ckpt").string();
+  const auto train = real_train_text();
+  const auto validation = real_validation_text();
+
+  TrainingConfig cfg;
+  cfg.steps = 48;
+  cfg.batch_size = 2;
+  cfg.sequence_length = 8;
+  cfg.warmup_steps = 8;
+  cfg.learning_rate = 0.005f;
+  cfg.min_learning_rate_ratio = 0.25f;
+  cfg.weight_decay = 0.0f;
+  cfg.max_grad_norm = 1.0f;
+  cfg.seed = 4321;
+  cfg.log_every = 0;
+  cfg.checkpoint_every = 0;
+  cfg.eval_every = 0;
+  cfg.full_eval_every = 0;
+
+  Model continuous = tiny_model();
+  TrainingResult continuous_result;
+  CHECK(train_model(continuous, train, validation, cfg, "", "", "",
+                    continuous_result).empty());
+  CHECK(continuous_result.final_step == cfg.steps);
+
+  Model paused = tiny_model();
+  cfg.max_steps_this_run = 17;
+  TrainingResult paused_result;
+  CHECK(train_model(paused, train, validation, cfg, "", checkpoint, "",
+                    paused_result).empty());
+  CHECK(paused_result.final_step == 17);
+  CHECK(std::filesystem::exists(checkpoint));
+
+  Model resumed = tiny_model();
+  cfg.max_steps_this_run = 0;
+  TrainingResult resumed_result;
+  CHECK(train_model(resumed, train, validation, cfg, "", checkpoint, checkpoint,
+                    resumed_result).empty());
+  CHECK(resumed_result.initial_step == 17);
+  CHECK(resumed_result.final_step == 48);
+  CHECK(same_weights(continuous, resumed));
+
+  std::filesystem::remove_all(root);
+}
+
 void test_checkpoint_extension_is_smooth_and_data_bound() {
   const auto root = std::filesystem::temp_directory_path() / "zika_training_test";
   std::filesystem::remove_all(root);
@@ -200,6 +261,7 @@ void test_bad_token_file() {
 
 int main() {
   test_real_text_training_and_sampled_evaluation();
+  test_interrupted_resume_matches_continuous_training();
   test_checkpoint_extension_is_smooth_and_data_bound();
   test_bad_token_file();
   std::printf("ZIKA training: %d verificacoes, %d falhas\n", checks, failures);
