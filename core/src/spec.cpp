@@ -122,7 +122,7 @@ std::string parse_spec_json(const std::string &text, ModelSpec &spec) {
       return std::string("falta a chave obrigatoria: ") + req;
   }
   if (out.tokenizer != "char" && out.tokenizer != "bpe")
-    return "tokenizer '" + out.tokenizer + "' nao suportado (opcoes: \"char\", \"bpe\")";
+    return "tokenizer '" + out.tokenizer + "' desconhecido (opcoes: \"char\", \"bpe\")";
 
   spec = std::move(out);
   return "";
