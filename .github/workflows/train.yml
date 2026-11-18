@@ -7,7 +7,7 @@ on:
         description: "Numero total de passos de treino"
         required: true
         type: number
-        default: 500
+        default: 1000
       batch_size:
         description: "Sequencias por passo"
         required: true
@@ -23,17 +23,53 @@ on:
         required: true
         type: number
         default: 1337
+      validation_ratio:
+        description: "Fracao de conversas para validacao"
+        required: true
+        type: string
+        default: "0.10"
+      test_ratio:
+        description: "Fracao de conversas para teste final"
+        required: true
+        type: string
+        default: "0.10"
+      eval_every:
+        description: "Intervalo de avaliacao amostrada"
+        required: true
+        type: number
+        default: 100
+      eval_tokens:
+        description: "Tokens maximos por avaliacao amostrada"
+        required: true
+        type: number
+        default: 2048
+      full_eval_every:
+        description: "Intervalo de avaliacao completa (0 desativa)"
+        required: true
+        type: number
+        default: 500
       resume_run_id:
         description: "ID de uma execucao anterior para retomar (opcional)"
         required: false
         type: string
         default: ""
+      resume_legacy_total_steps:
+        description: "Total original de passos para checkpoint antigo ZCKP v1 (0 se nao aplicavel)"
+        required: false
+        type: number
+        default: 0
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   train-nano:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       OMP_NUM_THREADS: 2
+      PYTHONPATH: python
     steps:
       - uses: actions/checkout@v4
 
@@ -47,13 +83,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Prepare dataset
-        env:
-          PYTHONPATH: python
+      - name: Prepare train, validation and held-out test sets
         run: |
           python -m zika.data \
-            --input data/dialogos.jsonl \
-            --output-dir "$RUNNER_TEMP/zika-data"
+            --input data/dialogos.jsonl data/dialogos_extra.jsonl \
+            --output-dir "$RUNNER_TEMP/zika-data" \
+            --validation-ratio "${{ inputs.validation_ratio }}" \
+            --test-ratio "${{ inputs.test_ratio }}"
 
       - name: Restore previous checkpoint
         if: ${{ inputs.resume_run_id != '' }}
@@ -70,7 +106,11 @@ jobs:
           BATCH_SIZE: ${{ inputs.batch_size }}
           SEQUENCE_LENGTH: ${{ inputs.sequence_length }}
           SEED: ${{ inputs.seed }}
+          EVAL_EVERY: ${{ inputs.eval_every }}
+          EVAL_TOKENS: ${{ inputs.eval_tokens }}
+          FULL_EVAL_EVERY: ${{ inputs.full_eval_every }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          RESUME_LEGACY_TOTAL_STEPS: ${{ inputs.resume_legacy_total_steps }}
         run: |
           set -euo pipefail
           mkdir -p output
@@ -88,7 +128,11 @@ jobs:
             --warmup-steps "$WARMUP"
             --seed "$SEED"
             --log-every 25
+            --eval-every "$EVAL_EVERY"
+            --eval-tokens "$EVAL_TOKENS"
+            --full-eval-every "$FULL_EVAL_EVERY"
             --checkpoint-every 100
+            --resume-legacy-total-steps "$RESUME_LEGACY_TOTAL_STEPS"
           )
           if [ -n "$RESUME_RUN_ID" ]; then
             CHECKPOINT="$RUNNER_TEMP/resume/zika-nano.ckpt"
@@ -97,16 +141,26 @@ jobs:
           fi
           ./build/zika train "${ARGS[@]}" 2>&1 | tee output/training.log
           ./build/zika info output/zika-nano.zika | tee output/model-info.txt
+          ./build/zika eval \
+            --model output/zika-nano.zika \
+            --data "$RUNNER_TEMP/zika-data/test.bin" \
+            --seq-len "$SEQUENCE_LENGTH" \
+            | tee output/held-out-test-evaluation.txt
+          cp "$RUNNER_TEMP/zika-data/manifest.json" output/dataset-manifest.json
 
       - name: Add training summary
         if: always()
         run: |
           if [ -f output/training.log ]; then
             echo "## ZIKA-Nano training" >> "$GITHUB_STEP_SUMMARY"
-            grep -E 'Inicio:|step [0-9]+/|Fim:' output/training.log >> "$GITHUB_STEP_SUMMARY" || true
+            grep -E 'Inicio:|step [0-9]+/|eval step|Fim:' output/training.log >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          if [ -f output/held-out-test-evaluation.txt ]; then
+            echo "## Held-out test" >> "$GITHUB_STEP_SUMMARY"
+            cat output/held-out-test-evaluation.txt >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Upload model and checkpoint
+      - name: Upload model, checkpoint and evaluation
         if: always()
         uses: actions/upload-artifact@v4
         with:
