@@ -160,6 +160,8 @@ void test_bpe_model_format_and_generation() {
   std::vector<uint32_t> generated;
   CHECK(generate_tokens(restored, {0, 3, 1}, cfg, rng, generated).empty());
   for (uint32_t id : generated) CHECK(id >= 3 && id < restored.cfg.vocab_size);
+  std::string generated_text;
+  CHECK(decode_tokens(restored.tok, generated, generated_text, true).empty());
 }
 
 void test_sampling() {
