@@ -22,7 +22,7 @@ Um pequeno modelo de linguagem em portugues, construido de raiz: Transformer dec
 - Tokenizer char-v0.1 com 124 tokens.
 - Pesos F32; BPE, KV cache e quantizacao ficam para fases posteriores.
 
-O tokenizer de caracteres e simples e reversivel, mas e ineficiente: 256 tokens representam aproximadamente 256 caracteres. A transicao para BPE e uma melhoria prioritaria antes de aumentar muito o contexto.
+O tokenizer char-v0.1 continua disponivel e e o padrao para preservar compatibilidade com os modelos existentes. O pipeline tambem suporta BPE byte-level v0.1 com fallback dos 256 bytes UTF-8: 3 IDs estruturais + 256 bytes base + merges aprendidos apenas no conjunto de treino. Assim, caracteres e idiomas fora do vocabulario antigo sao representaveis sem perda. O `.zika` embute tokens e merges; o ficheiro auxiliar `.zkt` e usado durante a preparacao e o treino. O BPE reduz o numero de tokens quando encontra sequencias frequentes, mas o seu beneficio real deve ser medido no corpus e nao presumido.
 
 ## Dados
 
@@ -45,6 +45,27 @@ PYTHONPATH=python python -m zika.data \
 A ferramenta valida papéis, alternancia, marcadores reservados e cobertura do vocabulario; remove duplicados normalizados; separa treino, validacao e teste; exporta `train.bin`, `val.bin` e `test.bin`; e escreve um manifesto com hashes SHA-256, contagens e origem dos ficheiros. A divisao e deterministica para a mesma seed.
 
 Os dados atuais continuam a ser um corpus pequeno de arranque. Nao devem ser descritos como suficientes para ensinar conhecimento geral. Para ampliar o corpus, acrescenta dialogos originais ou dados com licenca compativel e regista a proveniencia. Nao mistures o conjunto de teste no treino.
+
+### Preparar e treinar com BPE
+
+O BPE e opcional; char continua a ser o padrao. Para gerar tokenizer e conjuntos com byte fallback:
+
+```bash
+PYTHONPATH=python python -m zika.data \
+  --input data/dialogos.jsonl data/dialogos_extra.jsonl \
+  --output-dir data/processed-bpe \
+  --tokenizer bpe --vocab-size 512
+
+./build/zika train \
+  --config configs/nano-bpe.json \
+  --tokenizer-file data/processed-bpe/tokenizer.zkt \
+  --data data/processed-bpe/train.bin \
+  --val-data data/processed-bpe/val.bin \
+  --out models/zika-nano-bpe.zika \
+  --steps 1000 --batch-size 1 --seq-len 128
+```
+
+O BPE e aprendido apenas a partir das conversas de treino, depois da divisao por conversa. Validação e teste usam byte fallback para qualquer UTF-8, sem alterar os merges. O workflow manual do Actions tambem permite escolher `char` ou `bpe` e o tamanho do vocabulario. Nao reutilizes um checkpoint com outro tokenizer: os hashes dos dados e o modelo/tokenizer incorporado tem de corresponder.
 
 ## Treino na nuvem
 
@@ -120,7 +141,7 @@ Passar os testes verifica a integridade do codigo e do pipeline; nao substitui u
 
 1. Reunir um corpus significativamente maior, diversificado, deduplicado e com proveniencia/licenca registada.
 2. Treinar e avaliar o Nano com exemplos de teste nunca vistos.
-3. Implementar tokenizer BPE e medir a melhoria de contexto.
+3. Comparar char e BPE em comprimento de sequencia, loss e qualidade; manter o tokenizer que apresentar resultados melhores.
 4. Otimizar a inferencia com KV cache e medir latencia/memoria no telemovel.
 5. Implementar chat web offline e so depois testar Mini e quantizacao.
 

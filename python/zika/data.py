@@ -16,7 +16,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from .tokenizer import CharTokenizer, SPECIAL_TOKENS, TokenizerError
+from .tokenizer import BpeTokenizer, CharTokenizer, SPECIAL_TOKENS, TokenizerError
 
 ROLE_TOKEN = {"user": "<|user|>", "ia": "<|ia|>"}
 
@@ -27,9 +27,11 @@ class DatasetError(ValueError):
 
 def validate_conversation(
     item: Any, *, source: str = "<memory>", line_number: int = 1,
-    tokenizer: CharTokenizer | None = None,
+    tokenizer: CharTokenizer | BpeTokenizer | None = None,
+    validate_characters: bool = True,
 ) -> dict[str, list[dict[str, str]]]:
-    tokenizer = tokenizer or CharTokenizer()
+    if tokenizer is None and validate_characters:
+        tokenizer = CharTokenizer()
     if not isinstance(item, dict) or set(item) != {"turns"}:
         raise DatasetError(
             f"{source}:{line_number}: cada registo deve conter apenas a chave 'turns'"
@@ -64,10 +66,11 @@ def validate_conversation(
             raise DatasetError(
                 f"{source}:{line_number}: texto nao pode conter marcadores especiais reservados"
             )
-        try:
-            tokenizer.encode(text, parse_special_tokens=False)
-        except TokenizerError as exc:
-            raise DatasetError(f"{source}:{line_number}: {exc}") from exc
+        if validate_characters and tokenizer is not None:
+            try:
+                tokenizer.encode(text, parse_special_tokens=False)
+            except TokenizerError as exc:
+                raise DatasetError(f"{source}:{line_number}: {exc}") from exc
         clean_turns.append({"role": role, "text": text})
         expected_role = "ia" if expected_role == "user" else "user"
 
@@ -105,7 +108,7 @@ def _source_paths(path: str | Path | Sequence[str | Path]) -> list[Path]:
 
 
 def _load_sources(
-    paths: Sequence[Path], tokenizer: CharTokenizer
+    paths: Sequence[Path], tokenizer: CharTokenizer | BpeTokenizer | None
 ) -> tuple[list[dict[str, list[dict[str, str]]]], int]:
     conversations: list[dict[str, list[dict[str, str]]]] = []
     seen: set[str] = set()
@@ -125,7 +128,8 @@ def _load_sources(
                     f"{source}:{line_number}: JSON invalido na coluna {exc.colno}: {exc.msg}"
                 ) from exc
             conversation = validate_conversation(
-                item, source=str(source), line_number=line_number, tokenizer=tokenizer
+                item, source=str(source), line_number=line_number,
+                tokenizer=tokenizer, validate_characters=tokenizer is not None,
             )
             fingerprint = _fingerprint(conversation)
             if fingerprint in seen:
@@ -138,21 +142,23 @@ def _load_sources(
 
 def load_jsonl(
     path: str | Path | Sequence[str | Path],
-    tokenizer: CharTokenizer | None = None,
+    tokenizer: CharTokenizer | BpeTokenizer | None = None,
 ) -> list[dict[str, list[dict[str, str]]]]:
     conversations, _ = _load_sources(_source_paths(path), tokenizer or CharTokenizer())
     return conversations
 
 
 def encode_conversation(
-    conversation: dict[str, list[dict[str, str]]], tokenizer: CharTokenizer | None = None
+    conversation: dict[str, list[dict[str, str]]],
+    tokenizer: CharTokenizer | BpeTokenizer | None = None
 ) -> list[int]:
     tokenizer = tokenizer or CharTokenizer()
     return tokenizer.encode(serialize_conversation(conversation))
 
 
 def _encode_many(
-    conversations: Sequence[dict[str, list[dict[str, str]]]], tokenizer: CharTokenizer
+    conversations: Sequence[dict[str, list[dict[str, str]]]],
+    tokenizer: CharTokenizer | BpeTokenizer
 ) -> list[int]:
     result: list[int] = []
     for conversation in conversations:
@@ -182,6 +188,8 @@ def prepare_dataset(
     validation_ratio: float = 0.1,
     test_ratio: float = 0.1,
     seed: int = 42,
+    tokenizer_kind: str = "char",
+    bpe_vocab_size: int = 512,
 ) -> dict[str, Any]:
     if not 0.0 < validation_ratio < 1.0:
         raise DatasetError("validation_ratio tem de estar entre 0 e 1")
@@ -190,9 +198,14 @@ def prepare_dataset(
     if validation_ratio + test_ratio >= 1.0:
         raise DatasetError("validation_ratio + test_ratio tem de ser inferior a 1")
 
-    tokenizer = CharTokenizer()
+    if tokenizer_kind not in ("char", "bpe"):
+        raise DatasetError("tokenizer_kind tem de ser 'char' ou 'bpe'")
+    if tokenizer_kind == "char":
+        validation_tokenizer: CharTokenizer | BpeTokenizer | None = CharTokenizer()
+    else:
+        validation_tokenizer = None
     sources = _source_paths(input_path)
-    conversations, duplicate_count = _load_sources(sources, tokenizer)
+    conversations, duplicate_count = _load_sources(sources, validation_tokenizer)
     if len(conversations) < 3:
         raise DatasetError(
             "sao necessarias pelo menos tres conversas unicas para treino, validacao e teste"
@@ -212,6 +225,13 @@ def prepare_dataset(
     validation = [item for i, item in enumerate(conversations)
                   if i in validation_indices]
     test = [item for i, item in enumerate(conversations) if i in test_indices]
+    if tokenizer_kind == "char":
+        tokenizer: CharTokenizer | BpeTokenizer = CharTokenizer()
+    else:
+        tokenizer = BpeTokenizer.train(
+            (serialize_conversation(item) for item in train),
+            vocab_size=bpe_vocab_size,
+        )
     train_ids = _encode_many(train, tokenizer)
     validation_ids = _encode_many(validation, tokenizer)
     test_ids = _encode_many(test, tokenizer)
@@ -222,6 +242,8 @@ def prepare_dataset(
     val_count, val_sha = _write_u32le(destination / "val.bin", validation_ids)
     test_token_count, test_sha = _write_u32le(destination / "test.bin", test_ids)
     tokenizer.save(destination / "tokenizer.json")
+    if isinstance(tokenizer, BpeTokenizer):
+        tokenizer.save_binary(destination / "tokenizer.zkt")
 
     source_info = []
     for source in sources:
@@ -234,7 +256,8 @@ def prepare_dataset(
     manifest: dict[str, Any] = {
         "format": "zika-token-ids-u32le-v1",
         "schema_version": 2,
-        "tokenizer": "char-v0.1",
+        "tokenizer": "char-v0.1" if tokenizer_kind == "char" else "bpe-byte-v0.1",
+        "tokenizer_kind": tokenizer_kind,
         "vocab_size": tokenizer.vocab_size,
         "special_tokens": list(SPECIAL_TOKENS),
         "seed": seed,
@@ -275,6 +298,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--validation-ratio", type=float, default=0.1)
     parser.add_argument("--test-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--tokenizer", choices=("char", "bpe"), default="char")
+    parser.add_argument("--vocab-size", type=int, default=512,
+                        help="tamanho alvo do vocabulario BPE (259 tokens base)")
     args = parser.parse_args(argv)
 
     try:
@@ -283,6 +309,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             validation_ratio=args.validation_ratio,
             test_ratio=args.test_ratio,
             seed=args.seed,
+            tokenizer_kind=args.tokenizer,
+            bpe_vocab_size=args.vocab_size,
         )
     except (DatasetError, OSError, TokenizerError) as exc:
         print(f"erro: {exc}", file=sys.stderr)

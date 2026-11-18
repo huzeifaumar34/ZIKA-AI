@@ -34,7 +34,7 @@ Transformer decoder-only:
 ## 3. Tokenizer
 
 - **char-v0.1:** 124 tokens fixos; codificacao reversivel e rejeicao explicita de caracteres desconhecidos.
-- **BPE v0.2:** alvo futuro de aproximadamente 1.000 tokens, guardado no ficheiro do modelo.
+- **BPE byte-v0.1 (implementacao inicial):** 3 tokens estruturais, 256 tokens de byte UTF-8 e merges deterministas aprendidos apenas no treino; byte fallback garante cobertura de Unicode. O tokenizer fica embutido no `.zika` e e exportado em `.zkt` para preparar dados/treino.
 - O tokenizer atual e funcional mas ineficiente em contexto; BPE deve preceder a expansao agressiva do contexto.
 
 ## 4. Dados
@@ -112,7 +112,7 @@ Formato de modelo v1, little-endian, com magic, configuracao, tokenizer, tensore
 - Dados externos exigem verificacao de licenca, qualidade, duplicados e contaminacao do teste.
 - Testes automaticos precisam ser complementados por uma bateria qualitativa e revisao humana.
 
-## 10. Inferencia e chat no terminal (implementacao inicial)
+## 10. Tokenizer BPE byte-level (implementacao inicial)\n\n- `python/zika/tokenizer.py`: BPE deterministico com 3 tokens especiais, 256 bytes base, byte fallback e merges ordenados.\n- `python/zika/data.py`: aprende merges apenas no conjunto de treino, depois da divisao; exporta JSON, tokenizer ZTKZ v1 e tres conjuntos.\n- `core/src/format.cpp`: le e valida magic, versao, CRC32, ordem dos bytes e integridade dos merges; `.zika` continua a embutir os tokens e merges.\n- `core/src/generation.cpp`: encode/decode UTF-8 byte-level e inferencia com BPE; texto literal que se pareca com marcador especial nao e interpretado como token estrutural.\n- `configs/nano-bpe.json` e `--tokenizer-file` permitem treinar/inferir BPE mantendo char como default.\n- CI testa BPE round-trip, checksum, CLI train/eval/chat. A qualidade do Nano BPE continua por medir em campanha real.\n\n## 11. Inferencia e chat no terminal (implementacao inicial)
 
 - `core/src/generation.cpp`: codificacao e descodificacao UTF-8 para char-v0.1, amostragem por temperatura/Top-K/Top-P e geracao autoregressiva atraves de `forward_logits`.
 - `cli/chat.cpp`: `zika chat --model ...`, historico limitado a `ctx_len`, encerramento por `/sair` e parametros de amostragem.

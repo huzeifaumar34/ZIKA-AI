@@ -37,6 +37,16 @@ bool valid_utf8_unit(const std::string &text, size_t pos, size_t width) {
   return true;
 }
 
+bool valid_utf8_text(const std::string &text) {
+  size_t pos = 0;
+  while (pos < text.size()) {
+    const size_t width = utf8_width(static_cast<unsigned char>(text[pos]));
+    if (!valid_utf8_unit(text, pos, width)) return false;
+    pos += width;
+  }
+  return true;
+}
+
 bool valid_sampling_config(const GenerationConfig &cfg) {
   return cfg.max_new_tokens > 0 && std::isfinite(cfg.temperature) &&
          cfg.temperature > 0.0f && std::isfinite(cfg.top_p) &&
@@ -47,8 +57,38 @@ bool valid_sampling_config(const GenerationConfig &cfg) {
 
 std::string encode_text(const Tokenizer &tokenizer, const std::string &text,
                         std::vector<uint32_t> &ids) {
+  if (tokenizer.kind == TokenizerKind::BPE) {
+    constexpr size_t base_size = 259;
+    if (tokenizer.tokens.size() < base_size ||
+        tokenizer.merges.size() != tokenizer.tokens.size() - base_size)
+      return "vocabulario BPE invalido";
+    if (!valid_utf8_text(text))
+      return "texto contem UTF-8 invalido";
+    std::vector<uint32_t> encoded;
+    encoded.reserve(text.size());
+    for (unsigned char byte : text) encoded.push_back(3u + byte);
+    for (size_t rank = 0; rank < tokenizer.merges.size(); ++rank) {
+      const uint32_t left = tokenizer.merges[rank].first;
+      const uint32_t right = tokenizer.merges[rank].second;
+      const uint32_t new_id = static_cast<uint32_t>(base_size + rank);
+      std::vector<uint32_t> merged;
+      merged.reserve(encoded.size());
+      for (size_t i = 0; i < encoded.size();) {
+        if (i + 1 < encoded.size() &&
+            encoded[i] == left && encoded[i + 1] == right) {
+          merged.push_back(new_id);
+          i += 2;
+        } else {
+          merged.push_back(encoded[i++]);
+        }
+      }
+      encoded.swap(merged);
+    }
+    ids.insert(ids.end(), encoded.begin(), encoded.end());
+    return "";
+  }
   if (tokenizer.kind != TokenizerKind::Char)
-    return "apenas o tokenizer de caracteres esta implementado";
+    return "tipo de tokenizer desconhecido";
   if (tokenizer.tokens.size() < 4)
     return "vocabulario de caracteres invalido";
 
@@ -79,8 +119,21 @@ std::string encode_text(const Tokenizer &tokenizer, const std::string &text,
 std::string decode_tokens(const Tokenizer &tokenizer,
                           const std::vector<uint32_t> &ids,
                           std::string &text, bool skip_special) {
+  if (tokenizer.kind == TokenizerKind::BPE) {
+    std::string decoded;
+    for (uint32_t id : ids) {
+      if (id >= tokenizer.tokens.size())
+        return "ID de token fora do vocabulario: " + std::to_string(id);
+      if (skip_special && id < 3) continue;
+      decoded += tokenizer.tokens[id];
+    }
+    if (!valid_utf8_text(decoded))
+      return "tokens descodificados nao formam UTF-8 valido";
+    text.swap(decoded);
+    return "";
+  }
   if (tokenizer.kind != TokenizerKind::Char)
-    return "apenas o tokenizer de caracteres esta implementado";
+    return "tipo de tokenizer desconhecido";
   std::string decoded;
   for (uint32_t id : ids) {
     if (id >= tokenizer.tokens.size())
@@ -145,10 +198,13 @@ std::string generate_tokens(const Model &model,
   if (!valid_sampling_config(cfg))
     return "configuracao de geracao invalida";
   if (context.empty()) return "o contexto nao pode estar vazio";
-  if (model.tok.kind != TokenizerKind::Char ||
+  if ((model.tok.kind != TokenizerKind::Char &&
+       model.tok.kind != TokenizerKind::BPE) ||
       model.tok.tokens.size() != model.cfg.vocab_size)
-    return "modelo nao usa o tokenizer char esperado";
-  if (model.cfg.vocab_size < 4) return "vocabulario do modelo invalido";
+    return "tokenizer do modelo invalido";
+  if ((model.tok.kind == TokenizerKind::Char && model.cfg.vocab_size < 4) ||
+      (model.tok.kind == TokenizerKind::BPE && model.cfg.vocab_size < 259))
+    return "vocabulario do modelo invalido";
 
   std::vector<uint32_t> running = context;
   for (uint32_t step = 0; step < cfg.max_new_tokens; ++step) {

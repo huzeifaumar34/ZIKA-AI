@@ -27,7 +27,7 @@ void usage() {
       "ZIKA-AI %s\n\n"
       "Uso:\n"
       "  zika version\n"
-      "  zika init --config <ficheiro.json> --out <modelo.zika>\n"
+      "  zika init --config <ficheiro.json> --out <modelo.zika> [--tokenizer-file <tokenizer.zkt>]\n"
       "  zika info <modelo.zika> [--tensors]\n"
       "  zika train --config <ficheiro.json> --data <train.bin>\n"
       "      --val-data <val.bin> --out <modelo.zika> [opcoes]\n"
@@ -50,7 +50,8 @@ void usage() {
       "  --resume-legacy-total-steps N  horizonte original para checkpoint ZCKP v1\n"
       "  --max-steps-this-run N       pausa apos N passos e guarda o checkpoint\n"
       "  --checkpoint PATH           ficheiro de checkpoint\n"
-      "  --resume PATH               retomar de checkpoint\n\n"
+      "  --resume PATH               retomar de checkpoint\n"
+      "  --tokenizer-file PATH       tokenizer BPE em formato .zkt (obrigatorio para BPE)\n\n"
       "Opcoes de avaliacao:\n"
       "  --model PATH                modelo .zika treinado\n"
       "  --data PATH                 tokens uint32 little-endian\n"
@@ -95,6 +96,25 @@ bool parse_float(const std::string &text, float &value) {
   }
 }
 
+std::string load_configured_tokenizer(const ModelSpec &spec,
+                                      const std::string &tokenizer_path,
+                                      Tokenizer &tokenizer) {
+  if (spec.tokenizer == "char") {
+    if (!tokenizer_path.empty())
+      return "--tokenizer-file so pode ser usado com tokenizer bpe";
+    tokenizer.kind = TokenizerKind::Char;
+    tokenizer.tokens = default_char_vocab();
+  } else if (spec.tokenizer == "bpe") {
+    if (tokenizer_path.empty())
+      return "a configuracao bpe exige --tokenizer-file <tokenizer.zkt>";
+    const std::string error = read_tokenizer(tokenizer_path, tokenizer);
+    if (!error.empty()) return tokenizer_path + ": " + error;
+  } else {
+    return "tipo de tokenizer desconhecido: " + spec.tokenizer;
+  }
+  return "";
+}
+
 std::string human_size(uint64_t bytes) {
   char buf[64];
   if (bytes >= (1u << 20))
@@ -105,11 +125,15 @@ std::string human_size(uint64_t bytes) {
 }
 
 int cmd_init(int argc, char **argv) {
-  std::string config_path, out_path;
+  std::string config_path, out_path, tokenizer_path;
   for (int i = 2; i < argc; ++i) {
     const std::string arg = argv[i];
-    if ((arg == "--config" || arg == "--out") && i + 1 < argc)
-      (arg == "--config" ? config_path : out_path) = argv[++i];
+    if ((arg == "--config" || arg == "--out" || arg == "--tokenizer-file") && i + 1 < argc) {
+      const std::string value = argv[++i];
+      if (arg == "--config") config_path = value;
+      else if (arg == "--out") out_path = value;
+      else tokenizer_path = value;
+    }
     else
       return fail("argumento desconhecido ou sem valor: " + arg);
   }
@@ -122,8 +146,8 @@ int cmd_init(int argc, char **argv) {
   std::string err = load_spec_json(config_path, spec);
   if (!err.empty()) return fail(config_path + ": " + err);
   Tokenizer tok;
-  tok.kind = TokenizerKind::Char;
-  tok.tokens = default_char_vocab();
+  err = load_configured_tokenizer(spec, tokenizer_path, tok);
+  if (!err.empty()) return fail(err);
   spec.cfg.vocab_size = static_cast<uint32_t>(tok.tokens.size());
   err = validate_config(spec.cfg);
   if (!err.empty()) return fail(config_path + ": " + err);
@@ -185,14 +209,15 @@ int cmd_info(int argc, char **argv) {
 }
 
 int cmd_train(int argc, char **argv) {
-  std::string config_path, train_path, validation_path, out_path;
+  std::string config_path, train_path, validation_path, out_path, tokenizer_path;
   std::string checkpoint_path, resume_path;
   TrainingConfig cfg;
 
   for (int i = 2; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--config" || arg == "--data" || arg == "--val-data" ||
-        arg == "--out" || arg == "--checkpoint" || arg == "--resume") {
+        arg == "--out" || arg == "--checkpoint" || arg == "--resume" ||
+        arg == "--tokenizer-file") {
       if (i + 1 >= argc) return fail("falta valor para " + arg);
       const std::string value = argv[++i];
       if (arg == "--config") config_path = value;
@@ -200,6 +225,7 @@ int cmd_train(int argc, char **argv) {
       else if (arg == "--val-data") validation_path = value;
       else if (arg == "--out") out_path = value;
       else if (arg == "--checkpoint") checkpoint_path = value;
+      else if (arg == "--tokenizer-file") tokenizer_path = value;
       else resume_path = value;
       continue;
     }
@@ -254,8 +280,8 @@ int cmd_train(int argc, char **argv) {
   std::string err = load_spec_json(config_path, spec);
   if (!err.empty()) return fail(config_path + ": " + err);
   Tokenizer tok;
-  tok.kind = TokenizerKind::Char;
-  tok.tokens = default_char_vocab();
+  err = load_configured_tokenizer(spec, tokenizer_path, tok);
+  if (!err.empty()) return fail(err);
   spec.cfg.vocab_size = static_cast<uint32_t>(tok.tokens.size());
   err = validate_config(spec.cfg);
   if (!err.empty()) return fail(config_path + ": " + err);

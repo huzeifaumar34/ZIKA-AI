@@ -83,4 +83,7 @@ std::string deserialize(const uint8_t *data, size_t size, Model &out);
 std::string write_zika(const Model &model, const std::string &path);
 std::string read_zika(const std::string &path, Model &out);
 
+// Lê o formato auxiliar ZTKZ v1 usado pelo pipeline Python para BPE byte-level.
+std::string read_tokenizer(const std::string &path, Tokenizer &out);
+
 } // namespace zika

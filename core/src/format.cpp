@@ -79,6 +79,42 @@ struct Reader {
 
 const char *kTruncated = "ficheiro truncado ou corrompido";
 
+std::string validate_tokenizer_data(const Tokenizer &tokenizer) {
+  if (tokenizer.kind == TokenizerKind::Char) {
+    if (!tokenizer.merges.empty())
+      return "tokenizer char nao pode conter regras BPE";
+    return "";
+  }
+  if (tokenizer.kind != TokenizerKind::BPE)
+    return "tipo de tokenizer desconhecido";
+
+  constexpr size_t base_size = 3 + 256;
+  if (tokenizer.tokens.size() < base_size)
+    return "vocabulario BPE nao contem os 256 tokens de byte";
+  const std::string special[] = {"<|user|>", "<|ia|>", "<|fim|>"};
+  for (size_t i = 0; i < 3; ++i)
+    if (tokenizer.tokens[i] != special[i])
+      return "os tres tokens especiais BPE estao fora de ordem";
+  for (size_t value = 0; value < 256; ++value) {
+    const std::string expected(1, static_cast<char>(value));
+    if (tokenizer.tokens[value + 3] != expected)
+      return "tokens base BPE nao correspondem a ordem byte-v0";
+  }
+  if (tokenizer.merges.size() != tokenizer.tokens.size() - base_size)
+    return "numero de merges BPE difere do tamanho do vocabulario";
+  for (size_t i = 0; i < tokenizer.merges.size(); ++i) {
+    const uint32_t left = tokenizer.merges[i].first;
+    const uint32_t right = tokenizer.merges[i].second;
+    const size_t new_id = base_size + i;
+    if (left < 3 || right < 3 || left >= new_id || right >= new_id)
+      return "merge BPE invalido na posicao " + std::to_string(i);
+    const std::string expected = tokenizer.tokens[left] + tokenizer.tokens[right];
+    if (expected.size() > kMaxTokenLen || tokenizer.tokens[new_id] != expected)
+      return "token BPE nao corresponde ao merge " + std::to_string(i);
+  }
+  return "";
+}
+
 } // namespace
 
 uint32_t crc32(const uint8_t *data, size_t size) {
@@ -194,6 +230,8 @@ std::vector<uint8_t> serialize(const Model &m, std::string &err) {
     err = "o numero de tokens do vocabulario difere de vocab_size";
     return {};
   }
+  err = validate_tokenizer_data(m.tok);
+  if (!err.empty()) return {};
   for (const std::string &t : m.tok.tokens) {
     if (t.empty() || t.size() > kMaxTokenLen) {
       err = "token do vocabulario com tamanho invalido";
@@ -336,6 +374,8 @@ std::string deserialize(const uint8_t *data, size_t size, Model &out) {
       return kTruncated;
     m.tok.merges.emplace_back(a, b);
   }
+  err = validate_tokenizer_data(m.tok);
+  if (!err.empty()) return err;
 
   uint32_t n_tensors = 0;
   if (!r.u32(n_tensors))
@@ -426,6 +466,68 @@ std::string read_zika(const std::string &path, Model &out) {
   if (!f)
     return "erro ao ler " + path;
   return deserialize(bytes.data(), bytes.size(), out);
+}
+
+
+std::string read_tokenizer(const std::string &path, Tokenizer &out) {
+  constexpr uint64_t kMaxTokenizerFile = 1ull << 30;
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file) return "nao consegui abrir " + path;
+  const std::streamoff end = file.tellg();
+  if (end < 20 || static_cast<uint64_t>(end) > kMaxTokenizerFile)
+    return "tamanho de ficheiro ZTKZ invalido";
+  std::vector<uint8_t> bytes(static_cast<size_t>(end));
+  file.seekg(0);
+  file.read(reinterpret_cast<char *>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+  if (!file) return "erro ao ler " + path;
+  if (std::memcmp(bytes.data(), "ZTKZ", 4) != 0)
+    return "magia invalida: nao e um tokenizer ZTKZ";
+
+  const uint8_t *tail = bytes.data() + bytes.size() - 4;
+  const uint32_t stored =
+      static_cast<uint32_t>(tail[0]) |
+      (static_cast<uint32_t>(tail[1]) << 8) |
+      (static_cast<uint32_t>(tail[2]) << 16) |
+      (static_cast<uint32_t>(tail[3]) << 24);
+  if (crc32(bytes.data(), bytes.size() - 4) != stored)
+    return "checksum invalido no tokenizer ZTKZ";
+
+  Reader reader{bytes.data() + 4, tail};
+  uint32_t version = 0, kind = 0, token_count = 0, merge_count = 0;
+  if (!reader.u32(version) || !reader.u32(kind) ||
+      !reader.u32(token_count) || !reader.u32(merge_count))
+    return kTruncated;
+  if (version != 1) return "versao ZTKZ nao suportada";
+  if (kind != static_cast<uint32_t>(TokenizerKind::BPE))
+    return "ZTKZ deve conter tokenizer BPE";
+  if (token_count < 259 || token_count > (1u << 20) ||
+      merge_count > (1u << 20) || merge_count != token_count - 259)
+    return "contagens de tokens/merges ZTKZ invalidas";
+
+  Tokenizer parsed;
+  parsed.kind = TokenizerKind::BPE;
+  parsed.tokens.reserve(token_count);
+  for (uint32_t i = 0; i < token_count; ++i) {
+    uint32_t length = 0;
+    if (!reader.u32(length)) return kTruncated;
+    if (length == 0 || length > kMaxTokenLen || length > reader.left())
+      return "comprimento de token ZTKZ invalido";
+    std::string token(length, '\0');
+    if (!reader.bytes(&token[0], length)) return kTruncated;
+    parsed.tokens.push_back(std::move(token));
+  }
+  parsed.merges.reserve(merge_count);
+  for (uint32_t i = 0; i < merge_count; ++i) {
+    uint32_t left = 0, right = 0;
+    if (!reader.u32(left) || !reader.u32(right)) return kTruncated;
+    parsed.merges.emplace_back(left, right);
+  }
+  if (reader.left() != 0) return "dados a mais no tokenizer ZTKZ";
+  const std::string error = validate_tokenizer_data(parsed);
+  if (!error.empty()) return error;
+  out = std::move(parsed);
+  return "";
 }
 
 } // namespace zika
