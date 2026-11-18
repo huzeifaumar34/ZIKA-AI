@@ -15,9 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate workflow YAML
+      - name: Validate workflow YAML and shell scripts
         run: |
-          ruby -e 'require "yaml"; Dir.glob(".github/workflows/*.yml").each { |path| YAML.parse_file(path); puts "YAML valido: #{path}" }'
+          ruby -e '
+            require "yaml"
+            Dir.glob(".github/workflows/*.yml").each do |path|
+              workflow = YAML.load_file(path)
+              abort "workflow sem jobs: #{path}" unless workflow.is_a?(Hash) && workflow["jobs"].is_a?(Hash)
+              workflow["jobs"].each do |job_name, job|
+                (job["steps"] || []).each_with_index do |step, index|
+                  next unless step.is_a?(Hash) && step["run"]
+                  unless system("bash", "-n", "-c", step["run"])
+                    abort "shell invalido em #{path}, job #{job_name}, step #{index + 1}"
+                  end
+                end
+              end
+              puts "YAML e shell validos: #{path}"
+            end
+          '
 
       - name: Configure C++
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DZIKA_NATIVE=OFF
